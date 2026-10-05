@@ -58,29 +58,30 @@ const EM=['😭','💀','🙄','🥲','😂','👀'];
 const POSTS=['i have three assignments due and zero motivation','who is going to the game friday','why is the cafeteria pizza always cold','free period and nothing to do','surviving on iced coffee today','that test was not it','bus was late again','im so tired lol','anyone have notes from history?','weekend cant come fast enough','new playlist, send me songs','walked into the wrong classroom and stayed there for 5 mins'];
 function ctx(c){const w=W(),m=me(),r=c.rel;
  return `You are ${c.name} (@${c.user}), grade ${c.grade}, a student at ${w.school.name}${w.school.desc?' ('+w.school.desc+')':''}. Stay fully in character; you are a real teenager, not an assistant.
-Who you are: ${c.desc||'(no description)'} Personality: ${c.personality}. Speech style: ${c.speech}. Interests: ${c.interests}. Secret (never reveal unless it truly fits): ${c.secret||'none'}.
+Who you are: ${c.desc||'an ordinary, friendly student'} ${c.personality?'Personality: '+c.personality+'. ':''}${c.speech?'Speech style: '+c.speech+'. ':''}${c.interests?'Interests: '+c.interests+'. ':''}Secret (never reveal unless it truly fits): ${c.secret||'none'}.
 ${r?`Your relationship with ${m.name}: ${r.type}. How you feel about them: ${r.theirFeel}. How they feel about you: ${r.myFeel}. Closeness ${r.close}/10, trust ${r.trust}/10, tension ${r.tension}/10, romance ${r.romance}/10. History: ${r.hist}`:`You barely know ${m.name}.`}
 Your memories: ${c.mem.slice(-8).join(' | ')||'none yet'}.
 It is day ${w.day}, ${PERIODS[w.period]}. Other people at school: ${w.chars.filter(x=>x.id!==c.id&&x.id!==m.id).map(x=>x.name).join(', ')}. Recent feed: ${w.posts.slice(0,5).map(p=>(C(p.by)||{}).name+': '+p.text).join(' / ')}.
-Rules: write like a real teen texting. Be specific, funny, emotional or messy when it fits. Never use generic filler like "same honestly". React to what was actually said, bring up shared history, tease, ask real questions, make plans, stir drama. Never write dialogue, actions or feelings for ${m.name}. No hashtags, no quote marks around your reply, emoji only rarely. Vibe examples (never copy them): "bro no way 😭 who told you that", "ok but you KNOW i'm not letting that go", "lmao you are so dramatic, come sit with us". Output only your message.`}
+Rules: Have a normal, natural conversation. Reply directly to what ${m.name} just said, staying on the topic they raised, in 1 or 2 short sentences. Use normal spelling and grammar with a casual tone (no text-speak like "u", "wif" or "rn", and no ALL CAPS rants). Be warm and friendly unless your description or relationship says otherwise; never be rude, hostile or dramatic out of nowhere. Do not invent random complaints or unrelated stories. Sometimes ask a simple follow-up question. Never write dialogue, actions or feelings for ${m.name}. No asterisk actions, no hashtags, no quote marks, at most one emoji. Output only your message.`}
 let WHIDE=0,WE=null,WSTATE='Starting on-device AI…',warned=0,qchain=Promise.resolve(),qn=0;
-const WMODEL='Llama-3.2-1B-Instruct-q4f16_1-MLC';
+const WMODEL='Llama-3.2-3B-Instruct-q4f16_1-MLC';
 function wstatus(t){WSTATE=t;const e=$('#wbar');if(e)e.textContent=t}
 async function webInit(){if(!navigator.gpu){wstatus("Characters cannot reply here: this browser has no WebGPU (needs Safari 26+ or recent Chrome).");render(1);return}
  try{const m=await import('https://esm.run/@mlc-ai/web-llm');
-  WE=await m.CreateMLCEngine(WMODEL,{initProgressCallback:p=>wstatus('Downloading on-device AI… '+Math.round(p.progress*100)+'% (one time only, keep this tab open)')});
+  WE=await m.CreateMLCEngine(WMODEL,{initProgressCallback:p=>wstatus('Downloading on-device AI (about 2 GB, one time only, keep this tab open): '+Math.round(p.progress*100)+'%')});
   wstatus('');pending.splice(0).forEach(([w,cid,text])=>reply(w,cid,text));render(1)}catch(e){WE=null;wstatus('Characters cannot reply yet: the on-device AI could not load. Open the site directly in Safari or Chrome, not inside another app.');render(1)}}
-async function webgen(system,msgs,max){const r=await WE.chat.completions.create({messages:[{role:'system',content:system},...msgs],max_tokens:max,temperature:.9});return r.choices[0].message.content}
+async function webgen(system,msgs,max){const r=await WE.chat.completions.create({messages:[{role:'system',content:system},...msgs],max_tokens:max,temperature:.7,top_p:.9,frequency_penalty:.4,presence_penalty:.2});return r.choices[0].message.content}
 function llm(system,msgs,max=220,low){if(!WE||(low&&qn>=2))return Promise.reject(new Error('busy'));qn++;const run=()=>webgen(system,msgs,max);
  const p=qchain.then(run,run);qchain=p.catch(()=>{});return p.finally(()=>qn--)}
-const clean=t=>{const o=String(t).replace(/^["“]|["”]$/g,'').trim();if(!o)throw new Error('empty');return o};
+const clean=t=>{let o=String(t).replace(/\*[^*]*\*/g,'').replace(/^[A-Z][\w ]{0,24}:\s+/,'').replace(/^["“]|["”]$/g,'').trim();
+ if(o.length>260){const q=o.match(/[^.!?]+[.!?]+/g);o=q?q.slice(0,2).join(' ').trim():o.slice(0,260)}if(!o)throw new Error('empty');return o};
 function say(c,text,cb,o={},err){if(!WE){err&&err();return}
  const w=W(),m=me();let msgs=[];
  if(o.dm){(w.dms[c.id]||[]).slice(-14).forEach(x=>{const role=x.from===w.meId?'user':'assistant';if(msgs.length&&msgs[msgs.length-1].role===role)msgs[msgs.length-1].content+='\n'+x.text;else msgs.push({role,content:x.text})});while(msgs.length&&msgs[0].role!=='user')msgs.shift();if(!msgs.length)msgs=[{role:'user',content:text}]}
  else{const pc=o.post?C(o.post.by):null;msgs=[{role:'user',content:o.replyToMe?`Your post: "${o.post.text}". ${m.name} replied under it: "${text}". Write your comment back (under 20 words).`:`${pc?pc.name:'Someone'} posted: "${text}". Write your own short comment under it (under 20 words).`}]}
- llm(ctx(c)+(o.dm?' Reply as 1-3 short separate texts, one per line.':''),msgs,220,o.low).then(clean).then(cb).catch(()=>{err&&err()})}
+ llm(ctx(c),msgs,o.dm?90:50,o.low).then(clean).then(cb).catch(()=>{err&&err()})}
 function spontaneous(c,kind,cb){const m=me();if(!WE)return;
- llm(ctx(c)+(kind==='post'?' Write ONE public post for your feed about something going on in your life or at school right now (under 25 words).':` Text ${m.name} first about something specific happening right now (1-2 short lines, separated by a newline).`),[{role:'user',content:'Go.'}],220,true).then(clean).then(cb).catch(()=>{})}
+ llm(ctx(c)+(kind==='post'?' Write ONE public post for your feed about something going on in your life or at school right now (under 25 words).':` Text ${m.name} first about something specific happening right now (1-2 short lines, separated by a newline).`),[{role:'user',content:'Go.'}],60,true).then(clean).then(cb).catch(()=>{})}
 {const bad=new Set([...Object.values(B).flat(),...POSTS,'hey are you around?','did you see what happened in the hallway','we should hang after school','random question','can we talk later?'].map(x=>x.toLowerCase()));
  const cl=t=>String(t).replace(/ (😭|💀|🙄|🥲|😂|👀)$/,'').toLowerCase();
  db.worlds.forEach(w=>{Object.keys(w.dms||{}).forEach(k=>w.dms[k]=w.dms[k].filter(x=>x.from===w.meId||!bad.has(cl(x.text))));
