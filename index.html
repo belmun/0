@@ -1,0 +1,208 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hallpass</title><style>:root{--bg:#eef0ff;--card:#fff;--ink:#1b1b3a;--mute:#6b6b8f;--acc:#ff4f6d;--acc2:#2ec4b6;--line:#dcdff5}
+@media(prefers-color-scheme:dark){:root{--bg:#12122a;--card:#1c1c3c;--ink:#f0f0ff;--mute:#9a9ac0;--line:#2e2e57}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Trebuchet MS",system-ui,sans-serif;padding:env(safe-area-inset-top) 0 0}
+#app{display:grid;grid-template-columns:220px minmax(0,640px) 1fr;min-height:100vh;gap:0}
+nav{position:sticky;top:0;height:100vh;padding:20px 14px;display:flex;flex-direction:column;gap:4px}
+nav h1{margin:0 0 14px;font-size:24px;letter-spacing:-1px}nav h1 span{color:var(--acc)}
+nav button{all:unset;cursor:pointer;padding:10px 14px;border-radius:12px;font-weight:700}
+nav button.on,nav button:hover{background:var(--card)}nav button:focus-visible,button:focus-visible{outline:2px solid var(--acc)}
+main{padding:16px;min-width:0}aside{padding:20px;color:var(--mute);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;align-items:flex-start}.av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--acc2);flex:none;display:grid;place-items:center;color:#fff;font-weight:800}
+.big{width:80px;height:80px;font-size:28px}.mute{color:var(--mute);font-size:13px}.grow{flex:1;min-width:0}
+input,textarea,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit;margin:4px 0 10px}
+textarea{min-height:90px}label{font-weight:700;font-size:13px}
+.btn{background:var(--acc);color:#fff;border:0;border-radius:999px;padding:9px 18px;font-weight:800;cursor:pointer;font:inherit;font-weight:800}
+.btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}.btn.sm{padding:5px 12px;font-size:13px}
+.msg{max-width:80%;padding:8px 12px;border-radius:16px;margin:4px 0;background:var(--bg)}.msg.me{margin-left:auto;background:var(--acc);color:#fff}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.bar .grow input{margin:0}
+.banner{height:90px;border-radius:12px;background:linear-gradient(120deg,var(--acc2),var(--acc));background-size:cover;margin-bottom:8px}
+.stats{display:flex;gap:14px;font-size:14px;margin:6px 0 0}.pill{background:var(--bg);border-radius:99px;padding:2px 10px;font-size:12px}
+.empty{text-align:center;color:var(--mute);padding:40px 10px}
+@media(max-width:860px){#app{grid-template-columns:1fr;padding-bottom:70px}aside{display:none}
+nav{position:fixed;bottom:0;left:0;right:0;top:auto;height:auto;flex-direction:row;justify-content:space-around;background:var(--card);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:9}
+nav h1{display:none}nav button{padding:10px 8px;font-size:13px}}
+@media(prefers-reduced-motion:no-preference){.card{animation:in .25s}@keyframes in{from{opacity:0;transform:translateY(6px)}}}
+.acts{display:flex;gap:20px;margin-top:8px}.act{all:unset;cursor:pointer;color:var(--mute);font-size:14px;padding:4px 2px}.act.on{color:var(--acc)}.act:focus-visible{outline:2px solid var(--acc)}.thread{height:52vh;overflow-y:auto;padding:12px;display:flex;flex-direction:column}.msg:not(.me){border-bottom-left-radius:4px}.msg.me{border-bottom-right-radius:4px}.msg.typing{opacity:.6;letter-spacing:3px;width:fit-content}.dot{width:10px;height:10px;border-radius:50%;background:var(--acc)}</style></head>
+<body><div id="app"><main style="padding:40px"><b>Loading Hallpass…</b><br>If this stays blank, JavaScript is blocked in this viewer. Open the page in Safari or Chrome.</main></div><script>// Hallpass — a high-school social simulation. Static site; all data in localStorage.
+const DBKEY='hallpass.v1';const $=s=>document.querySelector(s);
+let db=JSON.parse(localStorage.getItem(DBKEY)||'{"worlds":[]}'),wid=null,tab='feed',dmWith=null,editId=null;
+db.worlds.forEach(w=>w.posts.forEach(p=>{p.text=p.text.replace(/ \(iconic, obviously\)/g,'');p.replies.forEach(r=>r.text=r.text.replace(/ \(iconic, obviously\)/g,''))}));
+const save=()=>{try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){toast('Storage full: remove some images.')}};
+const uid=()=>Math.random().toString(36).slice(2,9);const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const W=()=>db.worlds.find(w=>w.id===wid);const C=id=>W().chars.find(c=>c.id===id);
+const me=()=>C(W().meId);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PERIODS=['Homeroom','Period 1','Period 2','Lunch','Period 3','Period 4','After school','Evening'];
+const PLACES=['Classroom','Hallway','Cafeteria','Library','Gym','Courtyard','Auditorium','Lockers','Cafe'];
+const av=(c,cls='')=>c.avatar?`<img class="av ${cls}" src="${c.avatar}" alt="">`:`<div class="av ${cls}">${esc(c.name[0]||'?')}</div>`;
+const fmt=n=>n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+'k':n;
+function shrink(file,max,cb){const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const k=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.82))};i.src=r.result};r.readAsDataURL(file)}
+function newChar(o={}){return{id:uid(),name:'',user:'',age:16,grade:10,pron:'',bio:'',desc:'',personality:'',speech:'',interests:'',secret:'',followers:300,following:150,pop:5,avatar:'',banner:'',rel:null,mem:[],...o}}
+function mkWorld(){const p=newChar({name:'You',user:'you',followers:400});return{id:uid(),name:'My High School',school:{name:'Northfield High',desc:''},chars:[p],meId:p.id,posts:[],dms:{},rumors:[],log:[],alerts:[],period:0,day:1}}
+// ---- relationship helpers
+const likes=c=>c.rel&&(c.rel.theirFeel||'').match(/Likes|Trusts|crush|Protective|Looks up/i);
+const dislikes=c=>c.rel&&(c.rel.theirFeel||'').match(/Dislikes|Hates|trust me/i);
+// ---- AI layer (rule-based and context-aware; swap gen() for an LLM call if you add a proxy)
+const B={q:['honestly yeah','idk tbh, you?','wait why','depends lol','lowkey no','hmm let me think','why are you asking 👀'],
+neg:['oh no what happened','ugh same, hang in there','want to talk about it?','that sounds rough','im here if you need to vent','who do i need to fight'],
+pos:['LETS GOO','ok you deserve this','wait tell me everything','proud of you honestly','stoppp thats amazing'],
+hi:['hey!','yo whats up','hii','hey, whats going on'],
+plan:['im down','what time?','can i come?','cant, got practice. next time?','depends who else is going'],
+any:['wait what','lol fr','haha ok','no way','tell me more','same honestly','mm yeah','thats so true','ok but why tho'],
+cold:['ok','k','whatever','nobody asked','sure'],
+dry:['wow. groundbreaking.','incredible. anyway.','sure','love that for you','bold of you to say that out loud'],
+soft:['you ok?','im proud of you','text me later?','miss you actually']};
+const EM=['😭','💀','🙄','🥲','😂','👀'];
+const POSTS=['i have three assignments due and zero motivation','who is going to the game friday','why is the cafeteria pizza always cold','free period and nothing to do','surviving on iced coffee today','that test was not it','bus was late again','im so tired lol','anyone have notes from history?','weekend cant come fast enough','new playlist, send me songs','walked into the wrong classroom and stayed there for 5 mins'];
+function ctx(c){const w=W(),m=me(),r=c.rel;
+ return `You are ${c.name} (@${c.user}), grade ${c.grade}, a student at ${w.school.name}${w.school.desc?' ('+w.school.desc+')':''}. Stay fully in character; you are a real teenager, not an assistant.
+Who you are: ${c.desc||'(no description)'} Personality: ${c.personality}. Speech style: ${c.speech}. Interests: ${c.interests}. Secret (never reveal unless it truly fits): ${c.secret||'none'}.
+${r?`Your relationship with ${m.name}: ${r.type}. How you feel about them: ${r.theirFeel}. How they feel about you: ${r.myFeel}. Closeness ${r.close}/10, trust ${r.trust}/10, tension ${r.tension}/10, romance ${r.romance}/10. History: ${r.hist}`:`You barely know ${m.name}.`}
+Your memories: ${c.mem.slice(-8).join(' | ')||'none yet'}.
+It is day ${w.day}, ${PERIODS[w.period]}. Other people at school: ${w.chars.filter(x=>x.id!==c.id&&x.id!==m.id).map(x=>x.name).join(', ')}. Recent feed: ${w.posts.slice(0,5).map(p=>(C(p.by)||{}).name+': '+p.text).join(' / ')}.
+Rules: write like a real teen texting. Be specific, funny, emotional or messy when it fits. Never use generic filler like "same honestly". React to what was actually said, bring up shared history, tease, ask real questions, make plans, stir drama. Never write dialogue, actions or feelings for ${m.name}. No hashtags, no quote marks around your reply, emoji only rarely. Vibe examples (never copy them): "bro no way 😭 who told you that", "ok but you KNOW i'm not letting that go", "lmao you are so dramatic, come sit with us". Output only your message.`}
+let WHIDE=0,WE=null,WSTATE='Starting on-device AI…',warned=0,qchain=Promise.resolve(),qn=0;
+const WMODEL='Llama-3.2-1B-Instruct-q4f16_1-MLC';
+function wstatus(t){WSTATE=t;const e=$('#wbar');if(e)e.textContent=t}
+async function webInit(){if(!navigator.gpu){wstatus("Characters cannot reply here: this browser has no WebGPU (needs Safari 26+ or recent Chrome).");render(1);return}
+ try{const m=await import('https://esm.run/@mlc-ai/web-llm');
+  WE=await m.CreateMLCEngine(WMODEL,{initProgressCallback:p=>wstatus('Downloading on-device AI… '+Math.round(p.progress*100)+'% (one time only, keep this tab open)')});
+  wstatus('');pending.splice(0).forEach(([w,cid,text])=>reply(w,cid,text));render(1)}catch(e){WE=null;wstatus('Characters cannot reply yet: the on-device AI could not load. Open the site directly in Safari or Chrome, not inside another app.');render(1)}}
+async function webgen(system,msgs,max){const r=await WE.chat.completions.create({messages:[{role:'system',content:system},...msgs],max_tokens:max,temperature:.9});return r.choices[0].message.content}
+function llm(system,msgs,max=220,low){if(!WE||(low&&qn>=2))return Promise.reject(new Error('busy'));qn++;const run=()=>webgen(system,msgs,max);
+ const p=qchain.then(run,run);qchain=p.catch(()=>{});return p.finally(()=>qn--)}
+const clean=t=>{const o=String(t).replace(/^["“]|["”]$/g,'').trim();if(!o)throw new Error('empty');return o};
+function say(c,text,cb,o={},err){if(!WE){err&&err();return}
+ const w=W(),m=me();let msgs=[];
+ if(o.dm){(w.dms[c.id]||[]).slice(-14).forEach(x=>{const role=x.from===w.meId?'user':'assistant';if(msgs.length&&msgs[msgs.length-1].role===role)msgs[msgs.length-1].content+='\n'+x.text;else msgs.push({role,content:x.text})});while(msgs.length&&msgs[0].role!=='user')msgs.shift();if(!msgs.length)msgs=[{role:'user',content:text}]}
+ else{const pc=o.post?C(o.post.by):null;msgs=[{role:'user',content:o.replyToMe?`Your post: "${o.post.text}". ${m.name} replied under it: "${text}". Write your comment back (under 20 words).`:`${pc?pc.name:'Someone'} posted: "${text}". Write your own short comment under it (under 20 words).`}]}
+ llm(ctx(c)+(o.dm?' Reply as 1-3 short separate texts, one per line.':''),msgs,220,o.low).then(clean).then(cb).catch(()=>{err&&err()})}
+function spontaneous(c,kind,cb){const m=me();if(!WE)return;
+ llm(ctx(c)+(kind==='post'?' Write ONE public post for your feed about something going on in your life or at school right now (under 25 words).':` Text ${m.name} first about something specific happening right now (1-2 short lines, separated by a newline).`),[{role:'user',content:'Go.'}],220,true).then(clean).then(cb).catch(()=>{})}
+{const bad=new Set([...Object.values(B).flat(),...POSTS,'hey are you around?','did you see what happened in the hallway','we should hang after school','random question','can we talk later?'].map(x=>x.toLowerCase()));
+ const cl=t=>String(t).replace(/ (😭|💀|🙄|🥲|😂|👀)$/,'').toLowerCase();
+ db.worlds.forEach(w=>{Object.keys(w.dms||{}).forEach(k=>w.dms[k]=w.dms[k].filter(x=>x.from===w.meId||!bad.has(cl(x.text))));
+  w.posts=w.posts.filter(p=>p.by===w.meId||!bad.has(cl(p.text)));w.posts.forEach(p=>p.replies=p.replies.filter(r=>r.by===w.meId||!bad.has(cl(r.text))))})}
+const typing={};let replyTo=null;
+function gen(c,text){const t=(text||'').toLowerCase(),d=((c.desc||'')+' '+(c.personality||'')+' '+(c.speech||'')).toLowerCase(),r=c.rel;let k='any';
+ if(/\b(hey|hi|hii|yo|hello|sup)\b/.test(t)&&t.length<25)k='hi';else if(/\?/.test(t))k='q';
+ else if(/(tired|sad|hate|annoy|ugh|stress|exhaust|bad day|cry|sick|awful|worst|angry)/.test(t))k='neg';
+ else if(/(happy|excited|love|won|yay|good news|amazing|best|got in|passed|finally)/.test(t))k='pos';
+ else if(/(tonight|after school|lunch|hang|party|weekend|tomorrow|game|movie|plans)/.test(t))k='plan';
+ let bank=B[k];
+ if(r&&/Enem|Hates|Dislikes/i.test(r.type+' '+r.theirFeel))bank=B.cold;
+ else if(d.includes('sarcas')&&Math.random()<.4)bank=B.dry;
+ else if(r&&likes(c)&&Math.random()<.3&&(k==='neg'||k==='any'))bank=B.soft;
+ let out;do{out=rnd(bank)}while(out===c.last&&bank.length>1);c.last=out;
+ if(d.includes('quiet')||d.includes('shy'))out=out.toLowerCase().replace(/!/g,'');
+ if(Math.random()<.15&&bank!==B.cold&&k!=='neg')out+=' '+rnd(EM);return out}
+function aiText(c,kind){if(kind==='post'){let t=rnd(POSTS);if(c.interests&&Math.random()<.35)t='cant stop thinking about '+rnd(c.interests.split(/[,;]/)).trim()+' today';if((c.desc+c.speech).toLowerCase().includes('quiet'))t=t.toLowerCase();return t}
+ return rnd(['hey are you around?','did you see what happened in the hallway','we should hang after school','random question','can we talk later?'])}
+const reach=a=>Math.max(1,Math.round((a.followers||0)*(.01+Math.random()*.04)*((a.pop||5)/5)));
+function engage(post){const a=C(post.by),n=reach(a);post.likes+=n;post.reposts+=Math.round(n*(.05+Math.random()*.1));
+ const o=W().chars.filter(c=>c.id!==post.by&&c.id!==W().meId),k=0;
+ for(let i=0;i<k&&o.length;i++){const r=rnd(o);post.replies.push({by:r.id,text:gen(r,post.text)})}}
+const refresh=()=>{if(wid&&!editId)render(1)};
+function react(post){const w=W(),a=me(),n=Math.max(1,Math.round(Math.log10((a.followers||0)+10)*1.3*((a.pop||5)/5)));
+ const pool=w.chars.filter(c=>c.id!==a.id).sort(()=>Math.random()-.5).sort((x,y)=>(likes(y)?1:0)-(likes(x)?1:0)).slice(0,Math.min(6,n+1));
+ const ch=Math.max(1,Math.round(reach(a)/Math.max(1,pool.length)));
+ pool.forEach((c,i)=>setTimeout(()=>{if(wid!==w.id)return;post.likes+=ch;if(Math.random()<.35)post.reposts++;
+  if(!dislikes(c)||Math.random()<.3){if(Math.random()<.7){say(c,post.text,t=>{post.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to your post');save();refresh()},{post})}else w.alerts.unshift(c.name+' liked your post')}
+  save();refresh()},(2+i*3+Math.random()*3)*1000))}
+function answer(p,text){const w=W(),c=C(p.by);if(!c||c.id===w.meId||Math.random()<.15)return;
+ setTimeout(()=>{if(wid!==w.id)return;say(c,text,t=>{p.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to you');save();refresh()},{post:p,replyToMe:1})},(2+Math.random()*3)*1000)}
+function pushDM(c,text){const w=W();(w.dms[c.id]=w.dms[c.id]||[]).push({from:c.id,text,t:Date.now()});if(!(dmWith===c.id&&tab==='dm'))c.unread=(c.unread||0)+1;w.alerts.unshift(c.name+' messaged you')}
+const pending=[];
+function reply(w,cid,text){const c=C(cid);if(!c||wid!==w.id)return;
+ setTimeout(()=>{if(wid!==w.id)return;typing[cid]=1;refresh();
+  say(c,text,t=>{if(wid!==w.id)return;delete typing[cid];c.mem.push('Player texted: '+text);t.split('\n').filter(Boolean).forEach((m,i)=>setTimeout(()=>{w.dms[cid].push({from:cid,text:m,t:Date.now()});if(!(dmWith===cid&&tab==='dm'))c.unread=(c.unread||0)+1;save();refresh()},i*1200));save();refresh()},{dm:1},()=>{delete typing[cid];refresh()})},400+Math.random()*600)}
+function sendDM(cid,text){const w=W();(w.dms[cid]=w.dms[cid]||[]).push({from:w.meId,text,t:Date.now()});save();render();WE?reply(w,cid,text):pending.push([w,cid,text])}
+let ticks=0;
+function liveTick(){if(!wid||editId)return;const w=W(),ai=w.chars.filter(c=>c.id!==w.meId);if(!ai.length)return;ticks++;
+ if(ticks%3===0){w.period++;if(w.period>=PERIODS.length){w.period=0;w.day++}w.chars.forEach(c=>c.loc=rnd(PLACES))}
+ if(Math.random()<((!WE)?.6:.3)){const c=rnd(ai);spontaneous(c,'post',t=>{if(wid!==w.id)return;const p={id:uid(),by:c.id,text:t,likes:0,reposts:0,replies:[],t:Date.now()};engage(p);w.posts.unshift(p);if(!(!WE))ai.filter(x=>x.id!==c.id).sort(()=>Math.random()-.5).slice(0,1).forEach(r=>say(r,t,tt=>{p.replies.push({by:r.id,text:tt});save();refresh()},{post:p,low:1}));save();refresh()})}
+ if(w.posts.length&&Math.random()<.5){const p=rnd(w.posts.slice(0,8)),r=rnd(ai);if(r.id!==p.by){p.likes++;say(r,p.text,t=>{p.replies.push({by:r.id,text:t});save();refresh()},{post:p,low:1})}}
+ if(Math.random()<.3){const c=rnd(ai);if(likes(c)||Math.random()<.4)spontaneous(c,'dm',t=>{if(wid!==w.id)return;t.split('\n').filter(Boolean).forEach(x=>pushDM(c,x));save();refresh()})}
+ w.alerts=w.alerts.slice(0,40);w.posts=w.posts.slice(0,100);save();refresh()}
+function toast(m){const t=document.createElement('div');t.textContent=m;t.style.cssText='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:99px;z-index:99';document.body.appendChild(t);setTimeout(()=>t.remove(),2500)}
+// ---- player commands (logged exactly as typed; never invented)
+function command(raw,asPost){const w=W(),m=me(),s=raw.trim();if(!s)return;let x;
+ if(x=s.match(/^(?:text|dm)\s+(\S+?)\s*:?\s+([\s\S]+)/i)){const c=w.chars.find(c=>c.id!==m.id&&(c.name.toLowerCase().startsWith(x[1].toLowerCase())||c.user===x[1].toLowerCase()));
+  if(!c)return toast('No character matches "'+x[1]+'"');tab='dm';dmWith=c.id;c.unread=0;return sendDM(c.id,x[2])}
+ const pm=s.match(/^post\s*:\s*([\s\S]+)/i);
+ if(pm||asPost){const p={id:uid(),by:m.id,text:pm?pm[1]:s,likes:0,reposts:0,replies:[],t:Date.now()};w.posts.unshift(p);react(p)}
+ else w.log.unshift({t:s,when:`Day ${w.day} · ${PERIODS[w.period]}`});save();render()}
+// ---- views
+function render(restore){const root=$('#app'),keep={},fid=document.activeElement&&document.activeElement.id;
+ if(restore)document.querySelectorAll('#app textarea,#app input').forEach(i=>{if(i.id&&i.type!=='file'&&i.type!=='range')keep[i.id]=i.value});
+ if(!wid){root.innerHTML=`<main style="grid-column:1/-1;max-width:640px;margin:auto"><h1>Hallpass <small class="mute">v2</small></h1>${db.worlds.map(w=>`<div class="card row"><div class="grow"><b>${esc(w.name)}</b><div class="mute">${esc(w.school.name)} · ${w.chars.length} people</div></div><button class="btn sm" data-a="open" data-id="${w.id}">Continue</button><button class="btn sm alt" data-a="ren" data-id="${w.id}">Rename</button><button class="btn sm alt" data-a="dup" data-id="${w.id}">Duplicate</button><button class="btn sm alt" data-a="del" data-id="${w.id}">Delete</button></div>`).join('')||'<div class="empty">No worlds yet. Create your first school.</div>'}<button class="btn" data-a="new">Create world</button></main>`;return}
+ const w=W(),tabs=[['feed','Feed'],['dm','Chats'],['alerts','Alerts'],['cast','Cast'],['school','School'],['search','Search']];
+ root.innerHTML=`<nav><h1>hall<span>pass</span> <small class="mute">v2</small></h1>${tabs.map(([k,l])=>`<button class="${tab===k?'on':''}" data-tab="${k}">${l}${k==='dm'&&w.chars.some(c=>c.unread)?' •':''}</button>`).join('')}<button data-a="home">Worlds</button></nav><main>${WSTATE&&!WHIDE?`<div class="card mute row" style="align-items:center"><span id="wbar" class="grow">${esc(WSTATE)}</span><button class="act" data-a="wdismiss">✕</button></div>`:''}${view()}</main><aside><b>${esc(w.school.name)}</b><br>Day ${w.day} · ${PERIODS[w.period]}<br><span class="mute">The world updates live.</span></aside>`;
+ Object.keys(keep).forEach(k=>{const e=document.getElementById(k);if(e)e.value=keep[k]});
+ if(fid){const e=document.getElementById(fid);if(e&&e.focus)e.focus()}
+ const th=$('.thread');if(th)th.scrollTop=th.scrollHeight;const s=$('#q');if(s&&tab==='search'&&!restore)s.focus()}
+function postHTML(p){const c=C(p.by);if(!c)return'';
+ return`<div class="card"><div class="row">${av(c)}<div class="grow"><b>${esc(c.name)}</b> <span class="mute">@${esc(c.user)}</span><div>${esc(p.text)}</div><div class="acts"><button class="act" data-a="reply" data-id="${p.id}">💬 ${p.replies.length}</button><button class="act ${p.rt?'on':''}" data-a="rt" data-id="${p.id}">↻ ${fmt(p.reposts)}</button><button class="act ${p.lk?'on':''}" data-a="like" data-id="${p.id}">${p.lk?'♥':'♡'} ${fmt(p.likes)}</button></div>${p.replies.map(r=>{const rc=C(r.by);return rc?`<div class="row" style="margin-top:8px">${av(rc)}<div class="grow"><b>${esc(rc.name)}</b> <span class="mute">${esc(r.text)}</span></div></div>`:''}).join('')}${replyTo===p.id?`<div class="row" style="margin-top:8px"><input id="rin" placeholder="Reply…" style="margin:0"><button class="btn sm" data-a="rsend" data-id="${p.id}">Reply</button></div>`:''}</div></div></div>`}
+function view(){const w=W(),m=me();
+ if(tab==='feed')return`<div class="card"><div class="row">${av(m)}<div class="grow"><textarea id="cmd" placeholder="What's happening?"></textarea><button class="btn sm" data-a="post">Post</button> <button class="btn sm alt" data-a="do">Log an action</button></div></div></div>${w.log.slice(0,2).map(l=>`<div class="card mute">${esc(m.name)}: ${esc(l.t)}<br>${l.when}</div>`).join('')}${w.posts.map(postHTML).join('')||'<div class="empty">Quiet so far. Post something or wait a few seconds.</div>'}`;
+ if(tab==='dm'){const cur=dmWith&&C(dmWith);
+  if(!cur)return w.chars.filter(c=>c.id!==m.id).map(c=>{const d=w.dms[c.id]||[],l=d[d.length-1];return`<div class="card row" data-dm="${c.id}" style="cursor:pointer;align-items:center">${av(c)}<div class="grow"><b>${esc(c.name)}</b><div class="mute">${l?esc((l.from===m.id?'You: ':'')+l.text):'Tap to message'}</div></div>${c.unread?'<span class="dot"></span>':''}</div>`}).join('')||'<div class="empty">Add characters in Cast first.</div>';
+  return`<div class="card" style="padding:0"><div class="row" style="padding:12px;border-bottom:1px solid var(--line);align-items:center"><button class="btn sm alt" data-a="dmback">←</button>${av(cur)}<b>${esc(cur.name)}</b></div><div class="thread">${(w.dms[cur.id]||[]).map(x=>`<div class="msg ${x.from===m.id?'me':''}">${esc(x.text)}</div>`).join('')||'<div class="empty">Say hi.</div>'}${typing[cur.id]?'<div class="msg typing">• • •</div>':''}</div><div class="row" style="padding:10px"><input id="dmin" placeholder="Message…" style="margin:0"><button class="btn sm" data-a="dmsend">Send</button></div></div>`}
+ if(tab==='alerts')return w.alerts.map(a=>`<div class="card">${esc(a)}</div>`).join('')||'<div class="empty">Nothing yet.</div>';
+ if(tab==='school')return`<div class="card"><label>School name</label><input id="sn" value="${esc(w.school.name)}"><label>Description, rules, culture</label><textarea id="sd">${esc(w.school.desc)}</textarea><button class="btn" data-a="schoolsave">Save</button></div><div class="card"><b>Where everyone is</b>${w.chars.map(c=>`<div class="mute">${esc(c.name)}: ${c.loc||'—'}</div>`).join('')}</div>`;
+ if(tab==='search')return`<input id="q" placeholder="Search people and posts"><div id="res"></div>`;
+ if(tab==='cast')return editId?editor():`<button class="btn" data-a="addchar">Add character</button><br><br>${w.chars.map(c=>`<div class="card row">${av(c)}<div class="grow"><b>${esc(c.name)}</b>${c.id===m.id?' <span class="pill">you</span>':''}<div class="mute">@${esc(c.user)} · ${fmt(c.followers)} followers</div></div><button class="btn sm alt" data-a="edit" data-id="${c.id}">Edit</button></div>`).join('')}`}
+const rels=['Strangers','Classmates','Friends','Close friends','Best friends','Childhood friends','Rivals','Enemies','Frenemies','Crush','Dating','Complicated'];
+const feels=['Neutral','Likes me','Trusts me','Looks up to me','Protective of me','Has a crush on me','Jealous of me','Doesn\'t trust me','Dislikes me','Hates me','Conflicted'];
+const sl=(k,l,v)=>`<label>${l}: <span id="o_${k}">${v}</span></label><input type="range" min="1" max="10" id="${k}" value="${v}" oninput="document.getElementById('o_${k}').textContent=this.value">`;
+function editor(){const c=C(editId),isMe=c.id===wid&&false||c.id===W().meId,r=c.rel||{type:'Friends',myFeel:'Like them',theirFeel:'Likes me',close:5,trust:5,tension:2,romance:1,hist:''};
+ const f=(k,l,t='input')=>`<label>${l}</label><${t} id="f_${k}" ${t==='input'?`value="${esc(c[k])}"`:''}>${t==='textarea'?esc(c[k]):''}${t==='textarea'?'</textarea>':''}`;
+ return`<div class="card"><div class="banner" style="${c.banner?`background-image:url(${c.banner})`:''}"></div><div class="row">${av(c,'big')}<div class="grow"><b>${esc(c.name||'New character')}</b><div class="mute">Live preview · ${fmt(c.followers)} followers</div></div></div></div>
+ <div class="card">${f('name','Name')}${f('user','Username')}${f('grade','Grade')}${f('pron','Pronouns')}${f('bio','Bio','textarea')}
+ <label>Describe this character</label><textarea id="f_desc" style="min-height:160px" placeholder="Popular but quiet around strangers, sarcastic, my best friend since middle school…">${esc(c.desc)}</textarea>
+ ${f('personality','Personality')}${f('speech','Speech style')}${f('interests','Interests & hobbies')}${f('secret','Secret','textarea')}
+ <label>Followers</label><input type="number" id="f_followers" value="${c.followers}"><label>Following</label><input type="number" id="f_following" value="${c.following}">${sl('f_pop','Popularity',c.pop)}
+ <label>Profile picture</label><input type="file" id="pf" accept=".jpg,.jpeg,.png,.webp,image/*"><label>Banner</label><input type="file" id="bf" accept="image/*"></div>
+ ${isMe?'':`<div class="card"><b>Relationship with you</b><br><label>Relationship</label><select id="r_type">${rels.map(x=>`<option ${r.type===x?'selected':''}>${x}</option>`).join('')}</select><label>How do they feel about me?</label><select id="r_their">${feels.map(x=>`<option ${r.theirFeel===x?'selected':''}>${x}</option>`).join('')}</select><label>How do I feel about them?</label><input id="r_my" value="${esc(r.myFeel)}">${sl('r_close','Closeness',r.close)}${sl('r_trust','Trust',r.trust)}${sl('r_tension','Tension',r.tension)}${sl('r_romance','Romantic interest',r.romance)}<label>Describe your history together</label><textarea id="r_hist">${esc(r.hist)}</textarea></div>`}
+ <button class="btn" data-a="savechar">Save</button> <button class="btn alt" data-a="back">Back</button> ${isMe?'':'<button class="btn alt" data-a="delchar">Delete</button>'}`}
+// in-page dialog (prompt/confirm are blocked in many embedded viewers)
+function ask(msg,def,cb){const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:#0008;display:grid;place-items:center;z-index:99;padding:16px';
+ o.innerHTML=`<div class="card" style="width:100%;max-width:380px"><b>${esc(msg)}</b>${def!==null?`<input id="askin" value="${esc(def)}">`:'<br><br>'}<button class="btn" id="askok">${def!==null?'Save':'Delete'}</button> <button class="btn alt" id="askno">Cancel</button></div>`;
+ document.body.appendChild(o);const i=o.querySelector('#askin');i&&i.select();const go=()=>{const v=i?i.value.trim():true;if(!v)return;o.remove();cb(v)};
+ o.querySelector('#askok').onclick=go;o.querySelector('#askno').onclick=()=>o.remove();i&&i.addEventListener('keydown',e=>{if(e.key==='Enter')go()})}
+// ---- events
+document.addEventListener('click',e=>{const t=e.target.closest('[data-a],[data-tab],[data-dm]');if(!t)return;const d=t.dataset,w=wid&&W();
+ if(d.tab){tab=d.tab;editId=null;return render()}
+ if(d.dm){dmWith=d.dm;C(d.dm).unread=0;save();return render()}
+ const a=d.a;
+ if(a==='new')ask('Name your world','My High School',n=>{const x=mkWorld();x.name=n;db.worlds.push(x);save();wid=x.id;tab='cast';editId=x.meId;render()});
+ if(a==='open'){wid=d.id;tab='feed';render()}if(a==='home'){wid=null;render()}
+ if(a==='ren'){const x=db.worlds.find(v=>v.id===d.id);ask('Rename world',x.name,n=>{x.name=n;save();render()})}
+ if(a==='dup'){const x=JSON.parse(JSON.stringify(db.worlds.find(v=>v.id===d.id)));x.id=uid();x.name+=' (copy)';db.worlds.push(x);save();render()}
+ if(a==='del')ask('Delete this world permanently?',null,()=>{db.worlds=db.worlds.filter(v=>v.id!==d.id);save();render()});
+ if(a==='wdismiss'){WHIDE=1;render(1)}
+ const P=()=>w.posts.find(p=>p.id===d.id);
+ if(a==='like'){const p=P();p.lk=!p.lk;p.likes+=p.lk?1:-1;save();render()}
+ if(a==='rt'){const p=P();p.rt=!p.rt;p.reposts+=p.rt?1:-1;save();render()}
+ if(a==='reply'){replyTo=replyTo===d.id?null:d.id;render();const e=$('#rin');e&&e.focus()}
+ if(a==='rsend'){const v=$('#rin').value.trim(),p=P();if(v){p.replies.push({by:w.meId,text:v});replyTo=null;answer(p,v);save();render()}}
+ if(a==='post')command($('#cmd').value,true);if(a==='do')command($('#cmd').value,false);
+ if(a==='dmback'){dmWith=null;render()}
+ if(a==='dmsend'){const v=$('#dmin').value.trim();if(v)sendDM(dmWith,v)}
+  if(a==='dmsend'){const v=$('#dmin').value.trim();if(v){(w.dms[dmWith]=w.dms[dmWith]||[]).push({from:w.meId,text:v});save();render()}}
+ if(a==='schoolsave'){w.school.name=$('#sn').value;w.school.desc=$('#sd').value;save();render()}
+ if(a==='addchar'){const c=newChar({name:'New student'});w.chars.push(c);editId=c.id;render()}
+ if(a==='edit'){editId=d.id;render()}if(a==='back'){editId=null;render()}
+ if(a==='delchar')ask('Delete this character?',null,()=>{w.chars=w.chars.filter(c=>c.id!==editId);editId=null;save();render()});
+ if(a==='savechar')saveChar()});
+function saveChar(){const c=C(editId);['name','user','grade','pron','bio','desc','personality','speech','interests','secret'].forEach(k=>c[k]=$('#f_'+k).value);
+ c.user=(c.user||c.name).toLowerCase().replace(/\W/g,'');c.followers=+$('#f_followers').value||0;c.following=+$('#f_following').value||0;c.pop=+$('#f_pop').value;
+ if($('#r_type'))c.rel={type:$('#r_type').value,theirFeel:$('#r_their').value,myFeel:$('#r_my').value,close:+$('#r_close').value,trust:+$('#r_trust').value,tension:+$('#r_tension').value,romance:+$('#r_romance').value,hist:$('#r_hist').value};
+ const pf=$('#pf').files[0],bf=$('#bf').files[0],done=()=>{save();editId=null;render()};
+ const doB=()=>bf?shrink(bf,900,u=>{c.banner=u;done()}):done();pf?shrink(pf,256,u=>{c.avatar=u;doB()}):doB()}
+document.addEventListener('input',e=>{if(e.target.id==='q'){const q=e.target.value.toLowerCase(),w=W();$('#res').innerHTML=q?w.chars.filter(c=>(c.name+c.user).toLowerCase().includes(q)).map(c=>`<div class="card row">${av(c)}<b>${esc(c.name)}</b></div>`).join('')+w.posts.filter(p=>p.text.toLowerCase().includes(q)).map(postHTML).join(''):''}});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.shiftKey)return;const b=e.target.id==='dmin'?'dmsend':e.target.id==='rin'?'rsend':0;if(b){e.preventDefault();document.querySelector('[data-a='+b+']').click()}});
+setInterval(liveTick,18000);render();webInit();
+</script></body></html>
