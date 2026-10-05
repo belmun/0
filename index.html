@@ -30,35 +30,7 @@ nav h1{display:none}nav button{padding:10px 8px;font-size:13px}}
 const DBKEY='hallpass.v1';const $=s=>document.querySelector(s);
 let db=JSON.parse(localStorage.getItem(DBKEY)||'{"worlds":[]}'),wid=null,tab='feed',dmWith=null,editId=null,grp=null,newGroup=false;
 db.worlds.forEach(w=>w.posts.forEach(p=>{p.text=p.text.replace(/ \(iconic, obviously\)/g,'');p.replies.forEach(r=>r.text=r.text.replace(/ \(iconic, obviously\)/g,''))}));
-// ---- accounts + cloud sync (Firebase). Fill FIREBASE_CONFIG once (setup steps are in the chat).
-const FIREBASE_CONFIG={apiKey:"",authDomain:"",databaseURL:"",projectId:"",appId:""};
-let CU=null,cloudMsg='',cloudReady=0,syncT=null,lastPush='',cloudRef=null,cloudSeen=0;
-const cloudOn=()=>!!FIREBASE_CONFIG.apiKey;
-const rerender=()=>{if(!wid||tab==='settings')render(1)};
-function loadJS(u){return new Promise((ok,no)=>{const e=document.createElement('script');e.src=u;e.onload=ok;e.onerror=no;document.head.appendChild(e)})}
-async function cloudInit(){if(!cloudOn()||cloudReady)return;cloudReady=1;
- try{const B='https://www.gstatic.com/firebasejs/10.12.2/';await loadJS(B+'firebase-app-compat.js');await Promise.all([loadJS(B+'firebase-auth-compat.js'),loadJS(B+'firebase-database-compat.js')]);
-  firebase.initializeApp(FIREBASE_CONFIG);firebase.auth().onAuthStateChanged(u=>{CU=u;cloudMsg='';cloudSeen=0;if(u)cloudStart();else if(cloudRef){cloudRef.off();cloudRef=null}rerender()})}
- catch(e){cloudReady=0;cloudMsg='Could not load sign-in. Check your connection.';rerender()}}
-function mergeCloud(r){let ch=0;const gone=new Set([...(db.gone||[]),...(r.gone||[])]);db.gone=[...gone];db.worlds=db.worlds.filter(w=>!gone.has(w.id));
- (r.worlds||[]).forEach(x=>{if(gone.has(x.id))return;const o=db.worlds.find(w=>w.id===x.id);if(!o){db.worlds.push(x);ch=1}else if((x.upd||0)>(o.upd||0)){Object.keys(o).forEach(k=>delete o[k]);Object.assign(o,x);ch=1}});
- if(wid&&!db.worlds.some(w=>w.id===wid))wid=null;return ch}
-function cloudStart(){cloudRef=firebase.database().ref('users/'+CU.uid+'/db');
- cloudRef.on('value',snap=>{const v=snap.val();if(v&&v!==lastPush){let r=null;try{r=JSON.parse(v)}catch(e){}
-  if(r&&mergeCloud(r)){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}if(wid)refresh();else render(1)}}
-  if(!cloudSeen){cloudSeen=1;push()}},e=>{cloudMsg='Sync error: '+e.message;rerender()})}
-function push(){if(!CU||!cloudRef||!cloudSeen)return;clearTimeout(syncT);syncT=setTimeout(()=>{const v=JSON.stringify(db);lastPush=v;cloudRef.set(v).catch(e=>{cloudMsg='Sync failed: '+e.message;rerender()})},2500)}
-function acctCard(){if(!cloudOn())return`<div class="card"><b>Account</b><div class="mute">Cloud sync is not set up yet. Add your Firebase settings to index.html (FIREBASE_CONFIG) to turn on sign-in.</div></div>`;
- if(CU)return`<div class="card row" style="align-items:center"><div class="grow"><b>Signed in</b><div class="mute">${esc(CU.displayName||(CU.email||'').replace('@hallpass.app',''))} · your worlds sync across devices</div>${cloudMsg?`<div class="mute">${esc(cloudMsg)}</div>`:''}</div><button class="btn sm alt" data-a="aclogout">Log out</button></div>`;
- return`<div class="card"><b>Sign in to sync your worlds</b><label>Username</label><input id="au" autocomplete="username" autocapitalize="none"><label>Password</label><input id="ap" type="password" autocomplete="current-password"><button class="btn sm" data-a="aclogin">Log in</button> <button class="btn sm alt" data-a="acsignup">Sign up</button>${cloudMsg?`<div class="mute" style="margin-top:8px">${esc(cloudMsg)}</div>`:''}</div>`}
-function acctAct(a){if(!/^ac/.test(a||''))return;
- if(!cloudReady||typeof firebase==='undefined'){cloudMsg='Sign-in is still loading, try again.';rerender();return}
- const au=firebase.auth();if(a==='aclogout'){au.signOut();return}
- const go=pr=>pr.catch(e=>{cloudMsg=({'auth/wrong-password':'Wrong password.','auth/invalid-credential':'Wrong username or password.','auth/user-not-found':'No account with that username.','auth/email-already-in-use':'That username is taken.','auth/weak-password':'Password needs at least 6 characters.','auth/popup-closed-by-user':'Sign-in cancelled.'})[e.code]||e.message;rerender()});
-  const un=(($('#au')||{}).value||'').trim().toLowerCase(),pw=($('#ap')||{}).value;
- if(!/^[a-z0-9_.-]{3,20}$/.test(un))return toast('Username: 3 to 20 letters, numbers, _ . -');if(!pw)return toast('Enter a password');
- go(a==='acsignup'?au.createUserWithEmailAndPassword(un+'@hallpass.app',pw):au.signInWithEmailAndPassword(un+'@hallpass.app',pw))}
-const save=()=>{if(wid){const w=db.worlds.find(x=>x.id===wid);if(w)w.upd=Date.now()}push();try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){let ok=0;for(let n=0;n<80&&!ok;n++){let d=null;for(const w of db.worlds){for(let i=w.posts.length-1;i>=0;i--)if(w.posts[i].img){d=w.posts[i];break}if(d)break}if(!d)break;d.img='';try{localStorage.setItem(DBKEY,JSON.stringify(db));ok=1}catch(e2){}}toast(ok?'Storage was full, so your oldest tweet photos were removed.':'Storage full: remove some images.')}};
+const save=()=>{if(wid){const w=db.worlds.find(x=>x.id===wid);if(w)w.upd=Date.now()}try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){let ok=0;for(let n=0;n<80&&!ok;n++){let d=null;for(const w of db.worlds){for(let i=w.posts.length-1;i>=0;i--)if(w.posts[i].img){d=w.posts[i];break}if(d)break}if(!d)break;d.img='';try{localStorage.setItem(DBKEY,JSON.stringify(db));ok=1}catch(e2){}}toast(ok?'Storage was full, so your oldest tweet photos were removed.':'Storage full: remove some images.')}};
 const uid=()=>Math.random().toString(36).slice(2,9);const rnd=a=>a[Math.floor(Math.random()*a.length)];
 const W=()=>db.worlds.find(w=>w.id===wid);const C=id=>W().chars.find(c=>c.id===id);
 const me=()=>C(W().meId);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -80,7 +52,7 @@ function applyTheme(){const r=document.documentElement.style;['acc','acc2','bg',
  THEME.r!=null?r.setProperty('--r',THEME.r+'px'):r.removeProperty('--r');document.body.style.fontFamily=THEME.font||''}
 function settingsView(){const t=THEME,col=(k,l)=>`<label>${l}</label><input type="color" data-th="${k}" value="${t[k]||DEF[k]}" style="height:44px;padding:2px">`;
  const fonts=[['Default',''],['Serif','Georgia,serif'],['Rounded','"Avenir Next",Futura,sans-serif'],['System','system-ui,sans-serif'],['Mono','"Courier New",monospace']];
- return acctCard()+`<div class="card"><b>Theme</b><div class="bar" style="margin-top:8px">${Object.keys(PRE).map(k=>`<button class="btn sm alt" data-a="preset" data-id="${k}">${k}</button>`).join('')}</div>${col('acc','Accent color')}${col('acc2','Secondary color')}${col('bg','Background')}${col('card','Cards')}${col('ink','Text')}<label>Font</label><select data-th="font">${fonts.map(([l,v])=>`<option value="${esc(v)}" ${(t.font||'')===v?'selected':''}>${l}</option>`).join('')}</select><label>Roundness</label><input type="range" min="0" max="28" data-th="r" value="${t.r==null?16:t.r}"><button class="btn alt" data-a="resetth">Reset theme</button></div>`}
+ return`<div class="card"><b>Theme</b><div class="bar" style="margin-top:8px">${Object.keys(PRE).map(k=>`<button class="btn sm alt" data-a="preset" data-id="${k}">${k}</button>`).join('')}</div>${col('acc','Accent color')}${col('acc2','Secondary color')}${col('bg','Background')}${col('card','Cards')}${col('ink','Text')}<label>Font</label><select data-th="font">${fonts.map(([l,v])=>`<option value="${esc(v)}" ${(t.font||'')===v?'selected':''}>${l}</option>`).join('')}</select><label>Roundness</label><input type="range" min="0" max="28" data-th="r" value="${t.r==null?16:t.r}"><button class="btn alt" data-a="resetth">Reset theme</button></div>`}
 function groupForm(){const w=W(),m=me();return`<div class="card"><b>New group chat</b><input id="gname" placeholder="Group name"><div class="mute">Pick at least 2 members</div>${w.chars.filter(c=>c.id!==m.id).map(c=>`<label class="row" style="align-items:center;font-weight:400"><input type="checkbox" class="gm" value="${c.id}" style="width:auto;margin:0"> ${av(c,'sm')} ${esc(c.name)}</label>`).join('')}<br><button class="btn" data-a="gcreate">Create</button> <button class="btn alt" data-a="gcancel">Cancel</button></div>`}
 function groupThread(g){const w=W(),m=me();return`<div class="card" style="padding:0"><div class="row" style="padding:12px;border-bottom:1px solid var(--line);align-items:center"><button class="btn sm alt" data-a="gback">←</button><div class="grow"><b>${esc(g.name)}</b><div class="mute">${g.members.map(id=>((C(id)||{name:'?'}).name).split(' ')[0]).join(', ')}</div></div></div><div class="thread">${g.msgs.map(x=>{const c=C(x.from),mine=x.from===m.id;return mine?`<div class="msg me">${esc(x.text)}</div>`:`<div class="row" style="align-items:flex-end;gap:6px">${c?av(c,'sm'):''}<div class="msg"><div class="mute" style="font-size:11px">${esc(c?c.name:'')}</div>${esc(x.text)}</div></div>`}).join('')||'<div class="empty">Say hi.</div>'}${typing['g'+g.id]?`<div class="msg typing">${esc(typing['g'+g.id])} is typing…</div>`:''}</div><div class="row" style="padding:10px"><input id="gin" placeholder="Message the group…" style="margin:0"><button class="btn sm" data-a="gsend">Send</button></div></div>`}
 function gSend(gid,text){const w=W(),g=(w.groups||[]).find(x=>x.id===gid);if(!g)return;g.msgs.push({from:w.meId,text,t:Date.now()});save();render();if(WE)gReply(w,g,false)}
@@ -180,7 +152,7 @@ function greet(){if(!wid||!WE)return;const w=W();w.chars.filter(c=>c.id!==w.meId
 {const bad=new Set([...Object.values(B).flat(),...POSTS,'hey are you around?','did you see what happened in the hallway','we should hang after school','random question','can we talk later?'].map(x=>x.toLowerCase()));
  const cl=t=>String(t).replace(/ (😭|💀|🙄|🥲|😂|👀)$/,'').toLowerCase();
  db.worlds.forEach(w=>{Object.keys(w.dms||{}).forEach(k=>w.dms[k]=w.dms[k].filter(x=>x.from===w.meId||!bad.has(cl(x.text))));
-  w.posts=w.posts.filter(p=>p.by===w.meId||!bad.has(cl(p.text)));w.posts=w.posts.filter((p,i,a)=>p.by===w.meId||!a.slice(0,i).some(q=>q.by!==w.meId&&dup(p.text,[q.text])));w.posts.forEach(p=>p.replies=p.replies.filter(r=>r.by===w.meId||!bad.has(cl(r.text))))})}
+  w.posts=w.posts.filter(p=>p.by===w.meId||!bad.has(cl(p.text)));w.posts=w.posts.filter((p,i,a)=>p.by===w.meId||!a.slice(0,i).some(q=>q.by!==w.meId&&dup(p.text,[q.text])));w.posts.forEach(p=>p.replies=p.replies.filter(r=>r.by===w.meId||r.fast||!bad.has(cl(r.text))))})}
 const typing={};let replyTo=null;
 function gen(c,text){const t=(text||'').toLowerCase(),d=((c.desc||'')+' '+(c.personality||'')+' '+(c.speech||'')).toLowerCase(),r=c.rel;let k='any';
  if(/\b(hey|hi|hii|yo|hello|sup)\b/.test(t)&&t.length<25)k='hi';else if(/\?/.test(t))k='q';
@@ -200,13 +172,16 @@ const reach=a=>Math.max(1,Math.round((a.followers||0)*(.01+Math.random()*.04)*((
 function engage(post){const a=C(post.by),n=reach(a);post.likes+=n;post.reposts+=Math.round(n*(.05+Math.random()*.1));
  const o=W().chars.filter(c=>c.id!==post.by&&c.id!==W().meId),k=0;
  for(let i=0;i<k&&o.length;i++){const r=rnd(o);post.replies.push({by:r.id,text:gen(r,post.text)})}}
-const refresh=()=>{if(wid&&!editId&&!newGroup&&!(tab==='event'&&!evCur))render(1)};
+let rft=0;const refresh=()=>{if(rft)return;rft=setTimeout(()=>{rft=0;if(wid&&!editId&&!newGroup&&!(tab==='event'&&!evCur))render(1)},350)};
 function react(post){const w=W(),a=me(),n=Math.max(1,Math.round(Math.log10((a.followers||0)+10)*1.3*((a.pop||5)/5)));
- const pool=w.chars.filter(c=>c.id!==a.id).sort(()=>Math.random()-.5).sort((x,y)=>(likes(y)?1:0)-(likes(x)?1:0)).slice(0,Math.min(6,n+1));
- const ch=Math.max(1,Math.round(reach(a)/Math.max(1,pool.length)));
+ const all=w.chars.filter(c=>c.id!==a.id).sort(()=>Math.random()-.5),pool=[...all.filter(c=>!isEnemy(c)&&!dislikes(c)).sort((x,y)=>(likes(y)?1:0)-(likes(x)?1:0)),...all.filter(c=>isEnemy(c)||dislikes(c))].slice(0,Math.max(8,Math.min(10,n+5)));
+ const ch=Math.max(1,Math.round(reach(a)/pool.length));
  pool.forEach((c,i)=>setTimeout(()=>{if(wid!==w.id)return;post.likes+=ch;if(Math.random()<.35)post.reposts++;
-  if(!isEnemy(c)&&!dislikes(c)||Math.random()<.15){if(i<2||Math.random()<.8){say(c,postTxt(post),t=>{post.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to your post');save();refresh()},{post},()=>setTimeout(()=>{if(wid===w.id)say(c,postTxt(post),t=>{post.replies.push({by:c.id,text:t});save();refresh()},{post})},5000))}else w.alerts.unshift(c.name+' liked your post')}
-  save();refresh()},(2+i*3+Math.random()*3)*1000))}
+  if(isEnemy(c)||dislikes(c)){if(Math.random()<.15)addFast(w,post,c);else w.alerts.unshift(c.name+' liked your post')}
+  else if(i<3){const add=t=>{post.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to your post');save();refresh()},fb=()=>{if(wid===w.id&&!post.replies.some(x=>x.by===c.id)){add(fastText(c,post))}};
+   say(c,postTxt(post),add,{post},()=>setTimeout(()=>{if(wid!==w.id)return;say(c,postTxt(post),add,{post},fb)},4000))}
+  else addFast(w,post,c);
+  save();refresh()},(2+i*2+Math.random()*3)*1000))}
 function answer(p,text){const w=W(),c=C(p.by);if(!c||c.id===w.meId||Math.random()<.15)return;
  setTimeout(()=>{if(wid!==w.id)return;say(c,text,t=>{p.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to you');save();refresh()},{post:p,replyToMe:1})},(2+Math.random()*3)*1000)}
 function pushDM(c,text){const w=W();(w.dms[c.id]=w.dms[c.id]||[]).push({from:c.id,text,t:Date.now()});if(!(dmWith===c.id&&tab==='dm'))c.unread=(c.unread||0)+1;w.alerts.unshift(c.name+' messaged you')}
@@ -226,14 +201,29 @@ function liveTick(){if(!wid||editId)return;const w=W(),ai=w.chars.filter(c=>c.id
  if(WE&&(w.groups||[]).length&&Math.random()<.4){const g=rnd(w.groups),mm=g.members.map(C).filter(c=>c&&c.id!==w.meId),l3=g.msgs.slice(-3);if(mm.length&&!(l3.length===3&&l3.every(x=>x.from!==w.meId)))gOne(w,g,rnd(mm),true)}
  const mine=w.posts.find(p=>p.by===w.meId&&now-p.t<30*60000&&p.replies.filter(r=>r.by!==w.meId).length<3);
  if(mine&&WE&&Math.random()<.5){const r=rnd(ai.filter(c=>!isEnemy(c)&&!mine.replies.some(x=>x.by===c.id)));if(r)say(r,postTxt(mine),t=>{mine.replies.push({by:r.id,text:t});w.alerts.unshift(r.name+' replied to your post');save();refresh()},{post:mine})}
- w.alerts=w.alerts.slice(0,40);w.posts=w.posts.slice(0,100);save();refresh()}
+ w.alerts=w.alerts.slice(0,40);w.posts=w.posts.filter((p,i)=>i<150||(p.by===w.meId&&i<300));save();refresh()}
 // keeps the feed moving: someone posts every 30-70 seconds, whether or not you are texting
+const FASTR=['Same.','Honestly, yes.','No way.','Love this.','That is so true.','I felt that.','Okay, I see you.','Say it louder.','You good?','Literally me.','Respectfully, no.','Obsessed with this.','Wait, what?','Go off.','Facts.','Haha, same.','This is so real.','Not you posting this.','Honestly relatable.','Why is this so accurate?','Ha, nice.'];
+const FASTN=['Hang in there.','Sorry, that sounds rough.','Want to talk about it?','Here if you need me.','Ugh, same honestly.','You deserve a break.'];
+const FASTG=['Proud of you!','Yay, congrats!','You deserve this.','Love that for you.','Tell me everything!','So happy for you.'];
+const FASTP=['Cute photo!','Okay, this looks great.','Love this pic.','Where was this?','Obsessed.','This is a vibe.','Okay, I love this.'];
+const FASTW=['Love you, honestly.','You always post the best stuff.','Miss you, text me later.','Proud of you, always.'];
+function fastText(c,post){const t=(post.text||'').toLowerCase(),d=((c.desc||'')+' '+(c.personality||'')+' '+(c.speech||'')).toLowerCase(),r=c.rel;let pool=FASTR;
+ if(post.img&&!post.text)pool=FASTP;else if(/(tired|sad|hate|annoy|ugh|stress|exhaust|bad day|cry|sick|awful|worst|angry)/.test(t))pool=FASTN;else if(/(happy|excited|love|won|yay|good news|amazing|best|got in|passed|finally)/.test(t))pool=FASTG;
+ if(d.includes('sarcas')&&Math.random()<.4)pool=B.dry;if(r&&(r.close||0)>=7&&Math.random()<.5)pool=pool.concat(FASTW);
+ const used=post.replies.map(x=>x.text);let o,n=0;do{o=rnd(pool)}while(used.includes(o)&&n++<8);return o}
+function addFast(w,post,c){if(wid!==w.id||post.replies.some(x=>x.by===c.id))return;post.replies.push({by:c.id,text:fastText(c,post),fast:1})}
+// runs every few seconds while the page is open: new posts, and at least 5 replies on your latest post
+function fastTick(){if(!wid||editId||document.visibilityState!=='visible')return;const w=W(),ai=w.chars.filter(c=>c.id!==w.meId);if(!ai.length)return;
+ livePost(w,ai);
+ const mine=w.posts.find(p=>p.by===w.meId&&Date.now()-p.t>25000&&Date.now()-p.t<30*60000&&p.replies.filter(r=>r.by!==w.meId).length<5);
+ if(mine){const r=rnd(ai.filter(c=>!isEnemy(c)&&!mine.replies.some(x=>x.by===c.id)));if(r){addFast(w,mine,r);w.alerts.unshift(r.name+' replied to your post');save();refresh()}}}
 let nextPost=0,postBusy=0;
-function livePost(w,ai){if(!WE||postBusy||Date.now()<nextPost)return;
- const recent=w.posts.slice(0,10).map(p=>p.by),pool=ai.map(c=>({c,k:(c.pop||5)+Math.random()*6-(recent.includes(c.id)?4:0)})).sort((a,b)=>b.k-a.k).slice(0,3);
- const go=i=>{const c=pool[i]&&pool[i].c;if(!c){postBusy=0;nextPost=Date.now()+15000;return}postBusy=1;
-  spontaneous(c,'post',t=>{postBusy=0;if(wid!==w.id)return;nextPost=Date.now()+(30+Math.random()*40)*1000;const p={id:uid(),by:c.id,text:t,likes:0,reposts:0,replies:[],t:Date.now()};engage(p);w.posts.unshift(p);
-   ai.filter(x=>x.id!==c.id&&!isEnemy(x)).sort(()=>Math.random()-.5).slice(0,1).forEach(r=>say(r,t,tt=>{p.replies.push({by:r.id,text:tt});save();refresh()},{post:p,low:1}));save();refresh()},true,()=>go(i+1))};
+function livePost(w,ai){if(!WE||postBusy||Date.now()<nextPost||JOBS.filter(j=>j.pri<=1).length>2)return;
+ const recent=w.posts.slice(0,10).map(p=>p.by),pool=ai.map(c=>({c,k:(c.pop||5)+Math.random()*6-(recent.includes(c.id)?8:0)})).sort((a,b)=>b.k-a.k).slice(0,3);
+ const go=i=>{const c=pool[i]&&pool[i].c;if(!c){postBusy=0;nextPost=Date.now()+6000;return}postBusy=1;
+  spontaneous(c,'post',t=>{postBusy=0;if(wid!==w.id)return;nextPost=Date.now()+(8+Math.random()*8)*1000;const p={id:uid(),by:c.id,text:t,likes:0,reposts:0,replies:[],t:Date.now()};engage(p);w.posts.unshift(p);
+   ai.filter(x=>x.id!==c.id&&!isEnemy(x)).sort(()=>Math.random()-.5).slice(0,1).forEach(r=>say(r,t,tt=>{p.replies.push({by:r.id,text:tt});save();refresh()},{post:p,low:1}));ai.filter(x=>x.id!==c.id&&!isEnemy(x)).sort(()=>Math.random()-.5).slice(0,3+Math.floor(Math.random()*3)).forEach((r,k)=>setTimeout(()=>{if(wid===w.id){addFast(w,p,r);save();refresh()}},(3+k*4+Math.random()*3)*1000));save();refresh()},true,()=>go(i+1))};
  go(0)}
 function notify(title,text,open){let b=document.getElementById('notif');if(b)b.remove();b=document.createElement('div');b.id='notif';
  b.innerHTML=`<b>${esc(title)}</b><div>${esc(String(text).slice(0,90))}</div>`;b.style.cssText='position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(92vw,420px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:14px;padding:10px 14px;z-index:99;box-shadow:0 6px 24px #0006;cursor:pointer';
@@ -250,7 +240,7 @@ function command(raw,asPost){const w=W(),m=me(),s=raw.trim();if(!s&&!(asPost&&po
 // ---- views
 function render(restore){const root=$('#app'),keep={},fid=document.activeElement&&document.activeElement.id,sy=restore?window.scrollY:null,t0=$('.thread'),atB=!t0||t0.scrollHeight-t0.scrollTop-t0.clientHeight<80,ts=t0?t0.scrollTop:0;
  if(restore)document.querySelectorAll('#app textarea,#app input').forEach(i=>{if(i.id&&i.type!=='file'&&i.type!=='range')keep[i.id]=i.value});
- if(!wid){root.innerHTML=`<main style="grid-column:1/-1;max-width:640px;margin:auto"><h1>Hallpass <small class="mute">v2</small></h1>${acctCard()}${db.worlds.map(w=>`<div class="card row"><div class="grow"><b>${esc(w.name)}</b><div class="mute">${esc(w.school.name)} · ${w.chars.length} people</div></div><button class="btn sm" data-a="open" data-id="${w.id}">Continue</button><button class="btn sm alt" data-a="ren" data-id="${w.id}">Rename</button><button class="btn sm alt" data-a="dup" data-id="${w.id}">Duplicate</button><button class="btn sm alt" data-a="del" data-id="${w.id}">Delete</button></div>`).join('')||'<div class="empty">No worlds yet. Create your first school.</div>'}<button class="btn" data-a="new">Create world</button></main>`;return}
+ if(!wid){root.innerHTML=`<main style="grid-column:1/-1;max-width:640px;margin:auto"><h1>Hallpass <small class="mute">v2</small></h1>${db.worlds.map(w=>`<div class="card row"><div class="grow"><b>${esc(w.name)}</b><div class="mute">${esc(w.school.name)} · ${w.chars.length} people</div></div><button class="btn sm" data-a="open" data-id="${w.id}">Continue</button><button class="btn sm alt" data-a="ren" data-id="${w.id}">Rename</button><button class="btn sm alt" data-a="dup" data-id="${w.id}">Duplicate</button><button class="btn sm alt" data-a="del" data-id="${w.id}">Delete</button></div>`).join('')||'<div class="empty">No worlds yet. Create your first school.</div>'}<button class="btn" data-a="new">Create world</button></main>`;return}
  const w=W(),tabs=[['feed','Feed'],['dm','Chats'],['alerts','Alerts'],['cast','Cast'],['school','School'],['search','Search'],['settings','Settings']];
  root.innerHTML=`<nav><h1>hall<span>pass</span> <small class="mute">v2</small></h1>${tabs.map(([k,l])=>`<button class="${tab===k?'on':''}" data-tab="${k}">${l}${k==='dm'&&w.chars.some(c=>c.unread)?' •':''}</button>`).join('')}<button data-a="home">Worlds</button></nav><main>${WSTATE&&!WHIDE?`<div class="card mute row" style="align-items:center"><span id="wbar" class="grow">${esc(WSTATE)}</span><button class="act" data-a="wdismiss">✕</button></div>`:''}${view()}</main><aside><b>${esc(w.school.name)}</b><br>Day ${w.day} · ${PERIODS[w.period]}<br><span class="mute">The world updates live.</span></aside>`;
  Object.keys(keep).forEach(k=>{const e=document.getElementById(k);if(e)e.value=keep[k]});
@@ -299,8 +289,8 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-a],[data-t
  if(a==='open'){wid=d.id;tab='feed';render();setTimeout(greet,2500)}if(a==='home'){wid=null;render()}
  if(a==='ren'){const x=db.worlds.find(v=>v.id===d.id);ask('Rename world',x.name,n=>{x.name=n;save();render()})}
  if(a==='dup'){const x=JSON.parse(JSON.stringify(db.worlds.find(v=>v.id===d.id)));x.id=uid();x.name+=' (copy)';db.worlds.push(x);save();render()}
- if(a==='del')ask('Delete this world permanently?',null,()=>{db.worlds=db.worlds.filter(v=>v.id!==d.id);(db.gone=db.gone||[]).push(d.id);save();render()});
- acctAct(a);if(a==='wdismiss'){WHIDE=1;render(1)}
+ if(a==='del')ask('Delete this world permanently?',null,()=>{db.worlds=db.worlds.filter(v=>v.id!==d.id);save();render()});
+ if(a==='wdismiss'){WHIDE=1;render(1)}
  if(a==='pback'){tab=prevTab;render()}
  if(a==='msg'){tab='dm';dmWith=d.id;grp=null;C(d.id).unread=0;save();render()}
  if(a==='pedit'){tab='cast';editId=d.id;render()}
@@ -338,5 +328,5 @@ document.addEventListener('input',e=>{const th=e.target.dataset&&e.target.datase
  if(e.target.id==='q'){const q=e.target.value.toLowerCase(),w=W();$('#res').innerHTML=q?w.chars.filter(c=>(c.name+c.user).toLowerCase().includes(q)).map(c=>`<div class="card row">${av(c)}<b>${esc(c.name)}</b></div>`).join('')+w.posts.filter(p=>p.text.toLowerCase().includes(q)).map(postHTML).join(''):''}});
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.shiftKey)return;const b=e.target.id==='dmin'?'dmsend':e.target.id==='rin'?'rsend':e.target.id==='gin'?'gsend':0;if(b){e.preventDefault();document.querySelector('[data-a='+b+']').click()}});
 document.addEventListener('change',e=>{if(e.target.id==='pimg'){const f=e.target.files[0];e.target.value='';if(f)shrink(f,800,u=>{postImg=u;render(1)},.7)}});
-applyTheme();setInterval(liveTick,18000);render();webInit();cloudInit();
+applyTheme();setInterval(liveTick,18000);setInterval(fastTick,4000);render();webInit();
 </script></body></html>
