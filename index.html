@@ -112,8 +112,8 @@ function ctx(c,priv){const w=W(),m=me(),r=c.rel;
 Who you are: ${c.desc||'an ordinary, friendly student'} ${c.personality?'Personality: '+c.personality+'. ':''}${c.speech?'Speech style: '+c.speech+'. ':''}${c.interests?'Interests: '+c.interests+'. ':''}${priv&&c.secret?'Secret (keep private unless the chat really leads there): '+c.secret+'. ':''}
 ${r?`Your relationship with ${m.name}: ${r.type}. How you feel about them: ${r.theirFeel}. How they feel about you: ${r.myFeel}. Closeness ${r.close}/10, trust ${r.trust}/10, tension ${r.tension}/10, romance ${r.romance}/10. History: ${r.hist}`:`You barely know ${m.name}.`}
 Your memories: ${c.mem.slice(-8).join(' | ')||'none yet'}.
-It is day ${w.day}, ${PERIODS[w.period]}. Other people at school: ${w.chars.filter(x=>x.id!==c.id&&x.id!==m.id).map(x=>x.name).join(', ')}. Recent feed: ${w.posts.slice(0,5).map(p=>(C(p.by)||{}).name+': '+p.text).join(' / ')}.
-Rules: Have a normal, natural conversation. Reply directly to what ${m.name} just said, staying on the topic they raised, briefly. Use normal spelling and grammar with a casual tone (no text-speak like "u", "wif" or "rn", and no ALL CAPS rants). Be warm and friendly unless your description or relationship says otherwise; never be rude, hostile or dramatic out of nowhere. Do not invent random complaints or unrelated stories. Sometimes ask a simple follow-up question. Never write dialogue, actions or feelings for ${m.name}. No asterisk actions, no hashtags, no quote marks, at most one emoji. Output only your message.`}
+It is day ${w.day}, ${PERIODS[w.period]}. Other people at school: ${w.chars.filter(x=>x.id!==c.id&&x.id!==m.id).sort(()=>Math.random()-.5).slice(0,10).map(x=>x.name).join(', ')}. Recent feed: ${w.posts.slice(0,3).map(p=>(C(p.by)||{}).name+': '+p.text).join(' / ')}.
+Rules: Talk like a real teenager texting from their own account: natural and in your own voice, never like an assistant. Reply directly to what ${m.name} just said, staying on the topic they raised, briefly. Use normal spelling and grammar with a casual tone (no text-speak like "u", "wif" or "rn", and no ALL CAPS rants). Be warm and friendly unless your description or relationship says otherwise; never be rude, hostile or dramatic out of nowhere. Do not invent random complaints or unrelated stories. Sometimes ask a simple follow-up question. Never start two texts in a row with the same words. Never write dialogue, actions or feelings for ${m.name}. No asterisk actions, no hashtags, no quote marks, at most one emoji. Output only your message.`}
 let WHIDE=0,WE=null,WSTATE='Starting on-device AI…',warned=0,qchain=Promise.resolve(),qn=0;
 const WMODEL='Llama-3.2-3B-Instruct-q4f16_1-MLC';
 function wstatus(t){WSTATE=t;const e=$('#wbar');if(e)e.textContent=t}
@@ -121,7 +121,7 @@ async function webInit(){if(!navigator.gpu){wstatus("Characters cannot reply her
  try{const m=await import('https://esm.run/@mlc-ai/web-llm');
   WE=await m.CreateMLCEngine(WMODEL,{initProgressCallback:p=>wstatus('Downloading on-device AI (about 2 GB, one time only, keep this tab open): '+Math.round(p.progress*100)+'%')});
   wstatus('');pending.splice(0).forEach(([w,cid,text])=>reply(w,cid,text));render(1);setTimeout(greet,1500)}catch(e){WE=null;wstatus('Characters cannot reply yet: the on-device AI could not load. Open the site directly in Safari or Chrome, not inside another app.');render(1)}}
-async function webgen(system,msgs,max,temp){const r=await WE.chat.completions.create({messages:[{role:'system',content:system},...msgs],max_tokens:max,temperature:temp||.7,top_p:.9,frequency_penalty:.4,presence_penalty:.2});return r.choices[0].message.content}
+async function webgen(system,msgs,max,temp){const r=await WE.chat.completions.create({messages:[{role:'system',content:system},...msgs],max_tokens:max,temperature:temp||.7,top_p:.9,frequency_penalty:.1,presence_penalty:.1});return r.choices[0].message.content}
 // priority 0 = answers to you, 1 = posts and comments on your posts, 2 = unprompted texts, 3 = background chatter
 const JOBS=[];let jobRun=0,jobSeq=0;
 function jobPump(){if(jobRun||!JOBS.length||!WE)return;JOBS.sort((a,b)=>a.pri-b.pri||a.n-b.n);const j=JOBS.shift();jobRun=1;webgen(j.system,j.msgs,j.max,j.temp).then(j.ok,j.no).finally(()=>{jobRun=0;jobPump()})}
@@ -132,9 +132,9 @@ const clean=t=>{let o=String(t).replace(/\*[^*]*\*/g,'').replace(/^[A-Z][\w ]{0,
  if(o.length>260){const q=o.match(/[^.!?]+[.!?]+/g);o=q?q.slice(0,2).join(' ').trim():o.slice(0,260)}if(!o)throw new Error('empty');return o};
 function say(c,text,cb,o={},err){if(!WE){err&&err();return}
  const w=W(),m=me();let msgs=[];
- if(o.dm){(w.dms[c.id]||[]).slice(-14).forEach(x=>{const role=x.from===w.meId?'user':'assistant';if(msgs.length&&msgs[msgs.length-1].role===role)msgs[msgs.length-1].content+='\n'+x.text;else msgs.push({role,content:x.text})});while(msgs.length&&msgs[0].role!=='user')msgs.shift();if(!msgs.length)msgs=[{role:'user',content:text}]}
+ if(o.dm){(w.dms[c.id]||[]).slice(-10).forEach(x=>{const role=x.from===w.meId?'user':'assistant';if(msgs.length&&msgs[msgs.length-1].role===role)msgs[msgs.length-1].content+='\n'+x.text;else msgs.push({role,content:x.text})});while(msgs.length&&msgs[0].role!=='user')msgs.shift();if(!msgs.length)msgs=[{role:'user',content:text}]}
  else{const pc=o.post?C(o.post.by):null;msgs=[{role:'user',content:o.replyToMe?`Your post: "${o.post.text}". ${m.name} replied under it: "${text}". Write your comment back (under 20 words).`:`${pc?pc.name:'Someone'} posted: "${text}". Write your own short comment under it (under 20 words).`}]}
- llm(ctx(c,o.dm)+(o.dm?' Reply with 2 or 3 short separate texts, each on its own line, like a real chat.':''),msgs,o.dm?130:50,o.low,undefined,(o.dm||o.replyToMe)?0:(o.low?3:1)).then(t=>o.dm?cleanMulti(t):clean(t)).then(t=>{if(o.post&&dup(t,o.post.replies.map(r=>r.text)))throw new Error('dup');return t}).then(cb).catch(()=>{err&&err()})}
+ llm(ctx(c,o.dm)+(o.dm?' Reply with 2 or 3 short separate texts, each on its own line, like a real chat.':''),msgs,o.dm?90:40,o.low,undefined,(o.dm||o.replyToMe)?0:(o.low?3:1)).then(t=>o.dm?cleanMulti(t):clean(t)).then(t=>{if(o.post&&dup(t,o.post.replies.map(r=>r.text)))throw new Error('dup');return t}).then(cb).catch(()=>{err&&err()})}
 function norm(t){return String(t).toLowerCase().replace(/[^a-z0-9 ]/g,'').split(/\s+/).filter(x=>x.length>2)}
 function dup(t,list){const a=new Set(norm(t));if(!a.size)return true;return list.some(x=>{const b=new Set(norm(x));let n=0;a.forEach(w=>b.has(w)&&n++);return n/Math.max(a.size,b.size)>.6})}
 function cleanMulti(t){let L=String(t).replace(/\*[^*]*\*/g,'').split(/\n+/).map(x=>x.replace(/^[A-Z][\w ]{0,24}:\s+/,'').replace(/^["“]|["”]$/g,'').trim()).filter(Boolean);
@@ -174,14 +174,11 @@ function engage(post){const a=C(post.by),n=reach(a);post.likes+=n;post.reposts+=
  for(let i=0;i<k&&o.length;i++){const r=rnd(o);post.replies.push({by:r.id,text:gen(r,post.text)})}}
 let rft=0;const refresh=()=>{if(rft)return;rft=setTimeout(()=>{rft=0;if(wid&&!editId&&!newGroup&&!(tab==='event'&&!evCur))render(1)},350)};
 function react(post){const w=W(),a=me(),n=Math.max(1,Math.round(Math.log10((a.followers||0)+10)*1.3*((a.pop||5)/5)));
- const all=w.chars.filter(c=>c.id!==a.id).sort(()=>Math.random()-.5),pool=[...all.filter(c=>!isEnemy(c)&&!dislikes(c)).sort((x,y)=>(likes(y)?1:0)-(likes(x)?1:0)),...all.filter(c=>isEnemy(c)||dislikes(c))].slice(0,Math.max(8,Math.min(10,n+5)));
- const ch=Math.max(1,Math.round(reach(a)/pool.length));
- pool.forEach((c,i)=>setTimeout(()=>{if(wid!==w.id)return;post.likes+=ch;if(Math.random()<.35)post.reposts++;
-  if(isEnemy(c)||dislikes(c)){if(Math.random()<.15)addFast(w,post,c);else w.alerts.unshift(c.name+' liked your post')}
-  else if(i<3){const add=t=>{post.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to your post');save();refresh()},fb=()=>{if(wid===w.id&&!post.replies.some(x=>x.by===c.id)){add(fastText(c,post))}};
-   say(c,postTxt(post),add,{post},()=>setTimeout(()=>{if(wid!==w.id)return;say(c,postTxt(post),add,{post},fb)},4000))}
-  else addFast(w,post,c);
-  save();refresh()},(2+i*2+Math.random()*3)*1000))}
+ const all=w.chars.filter(c=>c.id!==a.id).sort(()=>Math.random()-.5),good=all.filter(c=>!isEnemy(c)&&!dislikes(c)).sort((x,y)=>(likes(y)?1:0)-(likes(x)?1:0)),bad2=all.filter(c=>isEnemy(c)||dislikes(c));
+ const pool=[...good,...bad2].slice(0,Math.max(8,Math.min(10,n+5))),ch=Math.max(1,Math.round(reach(a)/pool.length));
+ pool.forEach((c,i)=>setTimeout(()=>{if(wid!==w.id)return;post.likes+=ch;if(Math.random()<.35)post.reposts++;if(isEnemy(c)||dislikes(c))w.alerts.unshift(c.name+' liked your post');save();refresh()},(2+i*2+Math.random()*3)*1000));
+ const rp=good.slice(0,6),run=k=>{if(!WE||!rp.length)return;batchReplies(w,post,rp,1).then(L=>{if(wid!==w.id)return;L.forEach((x,i)=>setTimeout(()=>{if(wid!==w.id||post.replies.some(r=>r.by===x.c.id))return;post.replies.push({by:x.c.id,text:x.t});w.alerts.unshift(x.c.name+' replied to your post');save();refresh()},i*1600+200));if(L.length<4&&k<1)setTimeout(()=>run(k+1),1200)}).catch(()=>{if(k<1)setTimeout(()=>run(k+1),1500)})};
+ run(0)}
 function answer(p,text){const w=W(),c=C(p.by);if(!c||c.id===w.meId||Math.random()<.15)return;
  setTimeout(()=>{if(wid!==w.id)return;say(c,text,t=>{p.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to you');save();refresh()},{post:p,replyToMe:1})},(2+Math.random()*3)*1000)}
 function pushDM(c,text){const w=W();(w.dms[c.id]=w.dms[c.id]||[]).push({from:c.id,text,t:Date.now()});if(!(dmWith===c.id&&tab==='dm'))c.unread=(c.unread||0)+1;w.alerts.unshift(c.name+' messaged you')}
@@ -199,44 +196,50 @@ function liveTick(){if(!wid||editId)return;const w=W(),ai=w.chars.filter(c=>c.id
  if(cand.length&&Math.random()<.4&&!JOBS.some(j=>j.pri===2)){const tot=cand.reduce((a,c)=>a+dmWeight(c)**2,0);let x=Math.random()*tot,c=cand[0];for(const y of cand){x-=dmWeight(y)**2;if(x<=0){c=y;break}}
   spontaneous(c,'dm',t=>{if(wid!==w.id)return;deliver(w,c,t.split('\n').filter(Boolean))},false)}
  if(WE&&(w.groups||[]).length&&Math.random()<.4){const g=rnd(w.groups),mm=g.members.map(C).filter(c=>c&&c.id!==w.meId),l3=g.msgs.slice(-3);if(mm.length&&!(l3.length===3&&l3.every(x=>x.from!==w.meId)))gOne(w,g,rnd(mm),true)}
- const mine=w.posts.find(p=>p.by===w.meId&&now-p.t<30*60000&&p.replies.filter(r=>r.by!==w.meId).length<3);
- if(mine&&WE&&Math.random()<.5){const r=rnd(ai.filter(c=>!isEnemy(c)&&!mine.replies.some(x=>x.by===c.id)));if(r)say(r,postTxt(mine),t=>{mine.replies.push({by:r.id,text:t});w.alerts.unshift(r.name+' replied to your post');save();refresh()},{post:mine})}
  w.alerts=w.alerts.slice(0,40);w.posts=w.posts.filter((p,i)=>i<150||(p.by===w.meId&&i<300));save();refresh()}
 // keeps the feed moving: someone posts every 30-70 seconds, whether or not you are texting
-const FASTR=['Same.','Honestly, yes.','No way.','Love this.','That is so true.','I felt that.','Okay, I see you.','Say it louder.','You good?','Literally me.','Respectfully, no.','Obsessed with this.','Wait, what?','Go off.','Facts.','Haha, same.','This is so real.','Not you posting this.','Honestly relatable.','Why is this so accurate?','Ha, nice.'];
-const FASTN=['Hang in there.','Sorry, that sounds rough.','Want to talk about it?','Here if you need me.','Ugh, same honestly.','You deserve a break.'];
-const FASTG=['Proud of you!','Yay, congrats!','You deserve this.','Love that for you.','Tell me everything!','So happy for you.'];
-const FASTP=['Cute photo!','Okay, this looks great.','Love this pic.','Where was this?','Obsessed.','This is a vibe.','Okay, I love this.'];
-const FASTW=['Love you, honestly.','You always post the best stuff.','Miss you, text me later.','Proud of you, always.'];
-function fastText(c,post){const t=(post.text||'').toLowerCase(),d=((c.desc||'')+' '+(c.personality||'')+' '+(c.speech||'')).toLowerCase(),r=c.rel;let pool=FASTR;
- if(post.img&&!post.text)pool=FASTP;else if(/(tired|sad|hate|annoy|ugh|stress|exhaust|bad day|cry|sick|awful|worst|angry)/.test(t))pool=FASTN;else if(/(happy|excited|love|won|yay|good news|amazing|best|got in|passed|finally)/.test(t))pool=FASTG;
- if(d.includes('sarcas')&&Math.random()<.4)pool=B.dry;if(r&&(r.close||0)>=7&&Math.random()<.5)pool=pool.concat(FASTW);
- const used=post.replies.map(x=>x.text);let o,n=0;do{o=rnd(pool)}while(used.includes(o)&&n++<8);return o}
-function addFast(w,post,c){if(wid!==w.id||post.replies.some(x=>x.by===c.id))return;post.replies.push({by:c.id,text:fastText(c,post),fast:1})}
-// runs every few seconds while the page is open: new posts, and at least 5 replies on your latest post
+const brief=c=>c.name+(c.desc?': '+c.desc.slice(0,110):'')+(c.speech?'. Voice: '+c.speech.slice(0,60):'');
+function parseLines(t,chars){const out=[];String(t).replace(/\*+/g,'').split(/\n+/).forEach(l=>{const m=l.match(/^\s*(?:[-\d.)]+\s*)?([A-Za-z'’. -]{2,30}?)\s*[:\-–]\s*(.+)$/);if(!m)return;const nm=m[1].trim().toLowerCase(),c=chars.find(c=>c.name.toLowerCase()===nm||c.name.split(' ')[0].toLowerCase()===nm.split(' ')[0]);if(!c||out.some(o=>o.c===c))return;let x=m[2].trim().replace(/^["“]|["”]$/g,'');if(x.length>200)x=x.slice(0,200);if(x)out.push({c,t:x})});return out}
+function batchReplies(w,post,chars,pri){const m=me(),pc=C(post.by),mine=post.by===w.meId;
+ const sys='You write realistic replies from different high-school students under a social media post. Every reply must respond directly to what the post actually says and stay on its topic, in that person\'s own voice and in line with how they feel about the poster. 3 to 14 words each. Normal spelling and grammar, casual tone, at most one emoji, no hashtags, no quote marks. Output exactly one line per person in the form Name: reply.\nPeople:\n'+chars.map(c=>{const r=c.rel;return '- '+brief(c)+(mine&&r?'. To '+m.name+' they are: '+r.type+'; they feel: '+r.theirFeel+'.':'')}).join('\n');
+ const txt=post.text?'"'+post.text+'"'+(post.img?' (with a photo attached)':''):'a photo with no caption';
+ return llm(sys,[{role:'user',content:pc.name+' posted: '+txt+'\nWrite one reply from each person.'}],chars.length*34,false,.8,pri).then(t=>parseLines(t,chars)).then(L=>L.filter(x=>!dup(x.t,post.replies.map(r=>r.text))))}
+let topBusy=0;
+// runs every few seconds while the page is open: new posts, and replies on your latest post
 function fastTick(){if(!wid||editId||document.visibilityState!=='visible')return;const w=W(),ai=w.chars.filter(c=>c.id!==w.meId);if(!ai.length)return;
  livePost(w,ai);
- const mine=w.posts.find(p=>p.by===w.meId&&Date.now()-p.t>25000&&Date.now()-p.t<30*60000&&p.replies.filter(r=>r.by!==w.meId).length<5);
- if(mine){const r=rnd(ai.filter(c=>!isEnemy(c)&&!mine.replies.some(x=>x.by===c.id)));if(r){addFast(w,mine,r);w.alerts.unshift(r.name+' replied to your post');save();refresh()}}}
+ const mine=w.posts.find(p=>p.by===w.meId&&Date.now()-p.t>30000&&Date.now()-p.t<30*60000&&p.replies.filter(r=>r.by!==w.meId).length<5);
+ if(mine&&WE&&!topBusy&&(mine.top||0)<3&&!(tab==='dm'&&(dmWith||grp))){topBusy=1;mine.top=(mine.top||0)+1;const rp=ai.filter(c=>!isEnemy(c)&&!mine.replies.some(x=>x.by===c.id)).sort(()=>Math.random()-.5).slice(0,4);
+  batchReplies(w,mine,rp,1).then(L=>{L.forEach((x,i)=>setTimeout(()=>{if(wid===w.id&&!mine.replies.some(r=>r.by===x.c.id)){mine.replies.push({by:x.c.id,text:x.t});w.alerts.unshift(x.c.name+' replied to your post');save();refresh()}},i*1500))}).catch(()=>{}).finally(()=>{topBusy=0})}}
 let nextPost=0,postBusy=0;
-function livePost(w,ai){if(!WE||postBusy||Date.now()<nextPost||JOBS.filter(j=>j.pri<=1).length>2)return;
- const recent=w.posts.slice(0,10).map(p=>p.by),pool=ai.map(c=>({c,k:(c.pop||5)+Math.random()*6-(recent.includes(c.id)?8:0)})).sort((a,b)=>b.k-a.k).slice(0,3);
- const go=i=>{const c=pool[i]&&pool[i].c;if(!c){postBusy=0;nextPost=Date.now()+6000;return}postBusy=1;
-  spontaneous(c,'post',t=>{postBusy=0;if(wid!==w.id)return;nextPost=Date.now()+(8+Math.random()*8)*1000;const p={id:uid(),by:c.id,text:t,likes:0,reposts:0,replies:[],t:Date.now()};engage(p);w.posts.unshift(p);
-   ai.filter(x=>x.id!==c.id&&!isEnemy(x)).sort(()=>Math.random()-.5).slice(0,1).forEach(r=>say(r,t,tt=>{p.replies.push({by:r.id,text:tt});save();refresh()},{post:p,low:1}));ai.filter(x=>x.id!==c.id&&!isEnemy(x)).sort(()=>Math.random()-.5).slice(0,3+Math.floor(Math.random()*3)).forEach((r,k)=>setTimeout(()=>{if(wid===w.id){addFast(w,p,r);save();refresh()}},(3+k*4+Math.random()*3)*1000));save();refresh()},true,()=>go(i+1))};
- go(0)}
+function livePost(w,ai){if(!WE||postBusy||Date.now()<nextPost||JOBS.some(j=>j.pri===0)||JOBS.filter(j=>j.pri<=1).length>1||(tab==='dm'&&(dmWith||grp)))return;
+ const recent=w.posts.slice(0,12).map(p=>p.by),pool=ai.map(c=>({c,k:(c.pop||5)+Math.random()*7-(recent.includes(c.id)?8:0)})).sort((a,b)=>b.k-a.k).slice(0,4).map(x=>x.c);postBusy=1;
+ const old=w.posts.slice(0,10).map(p=>p.text).filter(Boolean);
+ const sys='You write realistic short posts for a high-school social media feed, one per person, each in that person\'s own voice about their own day or mood (a class, lunch, plans, music, sports, something that just happened). Be specific and natural, 6 to 18 words, normal spelling and grammar, at most one emoji, no hashtags, no quote marks, no name inside the post. Never repeat or reword these recent posts: '+(old.join(' | ')||'none')+'. Output exactly one line per person in the form Name: post.\nPeople:\n'+pool.map(c=>'- '+brief(c)).join('\n');
+ llm(sys,[{role:'user',content:'It is '+PERIODS[w.period]+' on day '+w.day+'. Write one new post for each person.'}],pool.length*40,false,.95,1).then(t=>parseLines(t,pool)).then(L=>{postBusy=0;nextPost=Date.now()+(10+Math.random()*10)*1000;if(wid!==w.id)return;
+  const ps=L.filter(x=>!dup(x.t,w.posts.slice(0,30).map(p=>p.text))).map(x=>({id:uid(),by:x.c.id,text:x.t,likes:0,reposts:0,replies:[],t:Date.now()}));
+  ps.forEach((p,i)=>setTimeout(()=>{if(wid!==w.id)return;engage(p);p.t=Date.now();w.posts.unshift(p);save();refresh()},i*2500));
+  const p0=ps[0];if(p0){const rp=ai.filter(c=>c.id!==p0.by&&!isEnemy(c)).sort(()=>Math.random()-.5).slice(0,4);
+   batchReplies(w,p0,rp,3).then(L2=>L2.forEach((y,i)=>setTimeout(()=>{if(wid===w.id&&w.posts.includes(p0)){p0.replies.push({by:y.c.id,text:y.t});save();refresh()}},4000+i*2500))).catch(()=>{})}
+ }).catch(()=>{postBusy=0;nextPost=Date.now()+8000})}
 function notify(title,text,open){let b=document.getElementById('notif');if(b)b.remove();b=document.createElement('div');b.id='notif';
  b.innerHTML=`<b>${esc(title)}</b><div>${esc(String(text).slice(0,90))}</div>`;b.style.cssText='position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(92vw,420px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:14px;padding:10px 14px;z-index:99;box-shadow:0 6px 24px #0006;cursor:pointer';
  b.onclick=()=>{b.remove();open&&open()};document.body.appendChild(b);setTimeout(()=>b.remove(),5000)}
 const lt=(w,c)=>{const d=w.dms[c.id]||[];return d.length?(d[d.length-1].t||1):0};
 function toast(m){const t=document.createElement('div');t.textContent=m;t.style.cssText='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:99px;z-index:99';document.body.appendChild(t);setTimeout(()=>t.remove(),2500)}
 // ---- player commands (logged exactly as typed; never invented)
+function actReact(w,s){const m=me(),ai=w.chars.filter(c=>c.id!==m.id),low=s.toLowerCase();
+ w.period++;if(w.period>=PERIODS.length){w.period=0;w.day++}
+ let who=ai.filter(c=>low.includes(c.name.split(' ')[0].toLowerCase()));
+ if(!who.length)who=ai.filter(c=>!isEnemy(c)).sort((a,b)=>dmWeight(b)-dmWeight(a)+Math.random()*4-2).slice(0,2);
+ who=who.slice(0,3);if(!WE){toast('The on-device AI is still loading, so nobody reacted yet.');return}
+ who.forEach((c,i)=>{c.mem.push(m.name+': '+s);setTimeout(()=>{llm(ctx(c,true)+' '+m.name+' just did this: "'+s+'". React in character, as 1 or 2 short texts sent to '+m.name+'. React to what they actually did.',[{role:'user',content:'Go.'}],90,false,.8,0).then(cleanMulti).then(t=>{if(wid===w.id)deliver(w,c,t.split('\n').filter(Boolean))}).catch(()=>{})},400+i*800)})}
 function command(raw,asPost){const w=W(),m=me(),s=raw.trim();if(!s&&!(asPost&&postImg))return;let x;
  if(x=s.match(/^(?:text|dm)\s+(\S+?)\s*:?\s+([\s\S]+)/i)){const c=w.chars.find(c=>c.id!==m.id&&(c.name.toLowerCase().startsWith(x[1].toLowerCase())||c.user===x[1].toLowerCase()));
   if(!c)return toast('No character matches "'+x[1]+'"');tab='dm';dmWith=c.id;c.unread=0;return sendDM(c.id,x[2])}
  const pm=s.match(/^post\s*:\s*([\s\S]+)/i);
  if(pm||asPost){const p={id:uid(),by:m.id,text:pm?pm[1]:s,img:postImg||'',likes:0,reposts:0,replies:[],t:Date.now()};postImg=null;w.posts.unshift(p);react(p)}
- else w.log.unshift({t:s,when:`Day ${w.day} · ${PERIODS[w.period]}`});save();render()}
+ else{w.log.unshift({t:s,when:`Day ${w.day} · ${PERIODS[w.period]}`});actReact(w,s)}save();render()}
 // ---- views
 function render(restore){const root=$('#app'),keep={},fid=document.activeElement&&document.activeElement.id,sy=restore?window.scrollY:null,t0=$('.thread'),atB=!t0||t0.scrollHeight-t0.scrollTop-t0.clientHeight<80,ts=t0?t0.scrollTop:0;
  if(restore)document.querySelectorAll('#app textarea,#app input').forEach(i=>{if(i.id&&i.type!=='file'&&i.type!=='range')keep[i.id]=i.value});
