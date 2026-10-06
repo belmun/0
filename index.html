@@ -55,8 +55,14 @@ function settingsView(){const t=THEME,col=(k,l)=>`<label>${l}</label><input type
  return`<div class="card"><b>AI mode</b><div class="mute">${FAST?'Fast mode (smaller AI, quicker replies)':'Standard mode (best writing, slower)'}${TPS?' · '+TPS.toFixed(1)+' words/sec':''}</div><button class="btn sm" data-a="${FAST?'aistd':'aifast'}">${FAST?'Switch to Standard':'Switch to Fast'}</button></div><div class="card"><b>Theme</b><div class="bar" style="margin-top:8px">${Object.keys(PRE).map(k=>`<button class="btn sm alt" data-a="preset" data-id="${k}">${k}</button>`).join('')}</div>${col('acc','Accent color')}${col('acc2','Secondary color')}${col('bg','Background')}${col('card','Cards')}${col('ink','Text')}<label>Font</label><select data-th="font">${fonts.map(([l,v])=>`<option value="${esc(v)}" ${(t.font||'')===v?'selected':''}>${l}</option>`).join('')}</select><label>Roundness</label><input type="range" min="0" max="28" data-th="r" value="${t.r==null?16:t.r}"><button class="btn alt" data-a="resetth">Reset theme</button></div>`}
 function groupForm(){const w=W(),m=me();return`<div class="card"><b>New group chat</b><input id="gname" placeholder="Group name"><div class="mute">Pick at least 2 members</div>${w.chars.filter(c=>c.id!==m.id).map(c=>`<label class="row" style="align-items:center;font-weight:400"><input type="checkbox" class="gm" value="${c.id}" style="width:auto;margin:0"> ${av(c,'sm')} ${esc(c.name)}</label>`).join('')}<br><button class="btn" data-a="gcreate">Create</button> <button class="btn alt" data-a="gcancel">Cancel</button></div>`}
 function groupThread(g){const w=W(),m=me();return`<div class="card" style="padding:0"><div class="row" style="padding:12px;border-bottom:1px solid var(--line);align-items:center"><button class="btn sm alt" data-a="gback">←</button><div class="grow"><b>${esc(g.name)}</b><div class="mute">${g.members.map(id=>((C(id)||{name:'?'}).name).split(' ')[0]).join(', ')}</div></div></div><div class="thread">${g.msgs.map(x=>{const c=C(x.from),mine=x.from===m.id;return mine?`<div class="msg me">${esc(x.text)}</div>`:`<div class="row" style="align-items:flex-end;gap:6px">${c?av(c,'sm'):''}<div class="msg"><div class="mute" style="font-size:11px">${esc(c?c.name:'')}</div>${esc(x.text)}</div></div>`}).join('')||'<div class="empty">Say hi.</div>'}${typing['g'+g.id]?`<div class="msg typing">${esc(typing['g'+g.id])} is typing…</div>`:''}</div><div class="row" style="padding:10px"><input id="gin" placeholder="Message the group…" style="margin:0"><button class="btn sm" data-a="gsend">Send</button></div></div>`}
-function gSend(gid,text){const w=W(),g=(w.groups||[]).find(x=>x.id===gid);if(!g)return;g.msgs.push({from:w.meId,text,t:Date.now()});save();render();if(WE)gReply(w,g,false)}
-function gReply(w,g,low){g.members.map(C).filter(c=>c&&c.id!==w.meId).sort(()=>Math.random()-.5).slice(0,1+Math.floor(Math.random()*3)).reduce((p,c)=>p.then(()=>gOne(w,g,c,low)),Promise.resolve())}
+function gSend(gid,text){const w0=W(),g0=(w0.groups||[]).find(x=>x.id===gid);if(g0)g0.busy=0;const w=W(),g=(w.groups||[]).find(x=>x.id===gid);if(!g)return;g.msgs.push({from:w.meId,text,t:Date.now()});save();render();if(WE)groupBanter(w,g,true)}
+function gReply(w,g,low){groupBanter(w,g,false)}
+function groupBanter(w,g,fromMe){if(wid!==w.id||!WE||g.busy)return;const m=me(),mem=g.members.map(C).filter(c=>c&&c.id!==w.meId);if(mem.length<2)return;
+ const pool=mem.sort(()=>Math.random()-.5).slice(0,5),tr=g.msgs.slice(-10).map(x=>((C(x.from)||{}).name||'?')+': '+x.text).join('\n')||'(the group chat was just created)';
+ const sys='You write a realistic group chat between high-school friends called "'+g.name+'". Members:\n'+pool.map(c=>'- '+brief(c)).join('\n')+'\n'+m.name+' is also in the chat. Continue the conversation with '+Math.min(pool.length,4)+' new messages from different members. They mostly talk to each other and keep the thread going like a real group chat: reacting to each other, teasing, making plans, asking questions, and now and then asking or mentioning '+m.name+' by name. '+(fromMe?'The first message must reply directly to what '+m.name+' just said. ':'')+'Each message is one short natural sentence of 3 to 16 words, normal spelling, at most one emoji, no hashtags. Never write messages for '+m.name+'. Output one message per line in the form Name: message.';
+ g.busy=1;g.last=Date.now();typing['g'+g.id]=pool[0].name;refresh();
+ llm(sys,[{role:'user',content:tr}],pool.length*38,false,.9,fromMe?0:2).then(t=>parseLines(t,pool)).then(L=>{if(wid!==w.id)return;
+  L.filter(x=>!dup(x.t,g.msgs.slice(-8).map(y=>y.text))).forEach((x,i)=>setTimeout(()=>{if(wid!==w.id)return;g.msgs.push({from:x.c.id,text:x.t,t:Date.now()});g.msgs=g.msgs.slice(-200);if(!(tab==='dm'&&grp===g.id))notify(g.name+' · '+x.c.name.split(' ')[0],x.t,()=>{tab='dm';grp=g.id;dmWith=null;render()});save();refresh()},i*1800+300))}).catch(()=>{}).finally(()=>{g.busy=0;delete typing['g'+g.id];refresh()})}
 function gOne(w,g,c,low){if(wid!==w.id||!WE)return Promise.resolve();
  const names=g.members.map(id=>(C(id)||{}).name).filter(Boolean).join(', '),tr=g.msgs.slice(-12).map(x=>((C(x.from)||{}).name||'?')+': '+x.text).join('\n')||'(the group chat was just created)';
  typing['g'+g.id]=c.name;refresh();
@@ -125,10 +131,13 @@ let TPS=0;
 async function webgen(system,msgs,max,temp){const t0=Date.now(),r=await WE.chat.completions.create({messages:[{role:'system',content:system},...msgs],max_tokens:max,temperature:temp||.7,top_p:.9,frequency_penalty:.1,presence_penalty:.1});const n=(r.usage&&r.usage.completion_tokens)||0,sec=(Date.now()-t0)/1000;if(n>8&&sec>0)TPS=TPS?TPS*.6+(n/sec)*.4:n/sec;return r.choices[0].message.content}
 // priority 0 = answers to you, 1 = posts and comments on your posts, 2 = unprompted texts, 3 = background chatter
 const JOBS=[];let jobRun=0,jobSeq=0;
+let aiFails=0,restarting=0,lastErr='',hidAt=0;
+async function restartAI(){if(restarting)return;restarting=1;render(1);try{if(WE)await WE.unload()}catch(e){}WE=null;JOBS.splice(0).forEach(j=>j.no(new Error('restart')));jobRun=0;try{await webInit()}catch(e){}restarting=0;aiFails=0;render(1)}
 function jobPump(){if(jobRun||!JOBS.length||!WE)return;JOBS.sort((a,b)=>a.pri-b.pri||a.n-b.n);const j=JOBS.shift();jobRun=1;let done=0,wd=0;
  const fin=f=>v=>{if(done)return;done=1;clearTimeout(wd);jobRun=0;f(v);jobPump()};
- wd=setTimeout(()=>{if(done)return;try{WE.interruptGenerate()}catch(e){}fin(j.no)(new Error('timeout'))},j.pri===0?90000:60000);
- webgen(j.system,j.msgs,j.max,j.temp).then(fin(j.ok),fin(j.no))}
+ const bad=e=>{aiFails++;lastErr=String((e&&e.message)||e).slice(0,100);if(aiFails>=3&&!restarting)setTimeout(restartAI,200)};
+ wd=setTimeout(()=>{if(done)return;try{WE.interruptGenerate()}catch(e){}bad('timeout');fin(j.no)(new Error('timeout'))},j.pri===0?90000:60000);
+ webgen(j.system,j.msgs,j.max,j.temp).then(v=>{aiFails=0;fin(j.ok)(v)},e=>{bad(e);fin(j.no)(e)})}
 function llm(system,msgs,max=220,low,temp,pri){if(!WE)return Promise.reject(new Error('busy'));pri=pri==null?(low?3:0):pri;
  if(pri>=3&&JOBS.length>=2)return Promise.reject(new Error('busy'));
  return new Promise((ok,no)=>{JOBS.push({system,msgs,max,temp,pri,n:++jobSeq,ok,no});jobPump()})}
@@ -184,26 +193,26 @@ function react(post){const w=W(),a=me(),n=Math.max(1,Math.round(Math.log10((a.fo
  const rp=good.slice(0,6),run=k=>{if(!WE||!rp.length)return;batchReplies(w,post,rp,1).then(L=>{if(wid!==w.id)return;L.forEach((x,i)=>setTimeout(()=>{if(wid!==w.id||post.replies.some(r=>r.by===x.c.id))return;post.replies.push({by:x.c.id,text:x.t});w.alerts.unshift(x.c.name+' replied to your post');save();refresh()},i*1600+200));if(L.length<4&&k<1)setTimeout(()=>run(k+1),1200)}).catch(()=>{if(k<1)setTimeout(()=>run(k+1),1500)})};
  run(0);setTimeout(()=>{if(wid!==w.id)return;const have=post.replies.filter(r=>r.by!==a.id).length;if(have<5)good.filter(c=>!post.replies.some(r=>r.by===c.id)).slice(0,5-have).forEach((c,i)=>setTimeout(()=>{if(wid===w.id&&!post.replies.some(r=>r.by===c.id)){post.replies.push({by:c.id,text:localReply(c,post),fast:1});w.alerts.unshift(c.name+' replied to your post');save();refresh()}},i*1200))},14000)}
 function answer(p,text){const w=W(),c=C(p.by);if(!c||c.id===w.meId||Math.random()<.15)return;
- setTimeout(()=>{if(wid!==w.id)return;say(c,text,t=>{p.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to you');save();refresh()},{post:p,replyToMe:1})},(2+Math.random()*3)*1000)}
+ setTimeout(()=>{if(wid!==w.id)return;say(c,text,t=>{p.replies.push({by:c.id,text:t});w.alerts.unshift(c.name+' replied to you');save();refresh()},{post:p,replyToMe:1},()=>{if(wid===w.id){p.replies.push({by:c.id,text:localReply(c,{text,replies:[]}),fast:1});save();refresh()}})},(2+Math.random()*3)*1000)}
 function pushDM(c,text){const w=W();(w.dms[c.id]=w.dms[c.id]||[]).push({from:c.id,text,t:Date.now()});if(!(dmWith===c.id&&tab==='dm'))c.unread=(c.unread||0)+1;w.alerts.unshift(c.name+' messaged you')}
 const pending=[];
 function reply(w,cid,text){const c=C(cid);if(!c||wid!==w.id)return;
  setTimeout(()=>{if(wid!==w.id)return;typing[cid]=1;refresh();
-  say(c,text,t=>{if(wid!==w.id)return;c.mem.push('Player texted: '+text);deliver(w,c,t.split('\n').filter(Boolean))},{dm:1},()=>{delete typing[cid];refresh()})},400+Math.random()*600)}
+  const ok=t=>{if(wid!==w.id)return;c.mem.push('Player texted: '+text);deliver(w,c,t.split('\n').filter(Boolean))},k=kw(text);
+  say(c,text,ok,{dm:1},()=>say(c,text,ok,{dm:1},()=>ok(k&&text.split(' ').length>=4?rnd(['What do you mean about '+k+'?','Wait, tell me more about '+k+'.']):rnd(['Haha, okay. Tell me more.','Wait, what do you mean?','Okay, what else is going on?']))))},400+Math.random()*600)}
 function sendDM(cid,text){const w=W();(w.dms[cid]=w.dms[cid]||[]).push({from:w.meId,text,t:Date.now()});save();render();WE?reply(w,cid,text):pending.push([w,cid,text])}
 let ticks=0;
 function liveTick(){if(!wid||editId)return;const w=W(),ai=w.chars.filter(c=>c.id!==w.meId);if(!ai.length)return;ticks++;
  if(ticks%3===0){w.period++;if(w.period>=PERIODS.length){w.period=0;w.day++}w.chars.forEach(c=>c.loc=rnd(PLACES))}
  livePost(w,ai);
  if(w.posts.length&&Math.random()<.5){const p=rnd(w.posts.slice(0,8)),r=rnd(ai);if(r.id!==p.by){p.likes++;say(r,p.text,t=>{p.replies.push({by:r.id,text:t});save();refresh()},{post:p,low:1})}}
- const now=Date.now(),cand=ai.filter(c=>{const k=dmWeight(c);if(k<1)return false;const d=w.dms[c.id]||[];let un=0;for(let i=d.length-1;i>=0&&d[i].from===c.id;i--)un++;return un<(k>=8?3:k>=4?2:1)&&now-(c.lastDM||0)>25*60000/(1+k)});
- if(cand.length&&Math.random()<.4&&!JOBS.some(j=>j.pri===2)){const tot=cand.reduce((a,c)=>a+dmWeight(c)**2,0);let x=Math.random()*tot,c=cand[0];for(const y of cand){x-=dmWeight(y)**2;if(x<=0){c=y;break}}
+ const now=Date.now(),cand=ai.filter(c=>{const k=dmWeight(c);if(k<1)return false;const d=w.dms[c.id]||[];let un=0;for(let i=d.length-1;i>=0&&d[i].from===c.id;i--)un++;return un<(k>=8?3:k>=4?2:1)&&now-(c.lastDM||0)>10*60000/(1+k)});
+ if(cand.length&&Math.random()<.6&&!JOBS.some(j=>j.pri===2)){const tot=cand.reduce((a,c)=>a+dmWeight(c)**2,0);let x=Math.random()*tot,c=cand[0];for(const y of cand){x-=dmWeight(y)**2;if(x<=0){c=y;break}}
   spontaneous(c,'dm',t=>{if(wid!==w.id)return;deliver(w,c,t.split('\n').filter(Boolean))},false)}
- if(WE&&(w.groups||[]).length&&Math.random()<.4){const g=rnd(w.groups),mm=g.members.map(C).filter(c=>c&&c.id!==w.meId),l3=g.msgs.slice(-3);if(mm.length&&!(l3.length===3&&l3.every(x=>x.from!==w.meId)))gOne(w,g,rnd(mm),true)}
  w.alerts=w.alerts.slice(0,40);w.posts=w.posts.filter((p,i)=>i<150||(p.by===w.meId&&i<300));save();refresh()}
 // keeps the feed moving: someone posts every 30-70 seconds, whether or not you are texting
 const brief=c=>c.name+(c.desc?': '+c.desc.slice(0,110):'')+(c.speech?'. Voice: '+c.speech.slice(0,60):'');
-function parseLines(t,chars){const out=[];String(t).replace(/\*+/g,'').split(/\n+/).forEach(l=>{const m=l.match(/^\s*(?:[-\d.)]+\s*)?([A-Za-z'’. -]{2,30}?)\s*[:\-–]\s*(.+)$/);if(!m)return;const nm=m[1].trim().toLowerCase(),c=chars.find(c=>c.name.toLowerCase()===nm||c.name.split(' ')[0].toLowerCase()===nm.split(' ')[0]);if(!c||out.some(o=>o.c===c))return;let x=m[2].trim().replace(/^["“]|["”]$/g,'');if(x.length>200)x=x.slice(0,200);if(x)out.push({c,t:x})});return out}
+function parseLines(t,chars){const out=[];String(t).replace(/\*+/g,'').split(/\n+/).forEach(l=>{const m=l.match(/^\s*(?:[-\d.)]+\s*)?([A-Za-z'’. -]{2,30}?)\s*[:\-–]\s*(.+)$/);if(!m)return;const nm=m[1].trim().toLowerCase(),c=chars.find(c=>c.name.toLowerCase()===nm||c.name.split(' ')[0].toLowerCase()===nm.split(' ')[0]);if(!c||out.some(o=>o.c===c))return;let x=m[2].trim().replace(/^["“]|["”]$/g,'');if(x.length>200)x=x.slice(0,200);if(x)out.push({c,t:x})});if(out.length<2){const ls=String(t).replace(/\*+/g,'').split(/\n+/).map(l=>l.replace(/^\s*[-\d.)]+\s*/,'').replace(/^[A-Za-z'’. -]{2,30}:\s*/,'').replace(/^["“]|["”]$/g,'').trim()).filter(l=>l.length>3);if(ls.length>=2)return chars.slice(0,ls.length).map((c,i)=>({c,t:ls[i].slice(0,200)}))}return out}
 function batchReplies(w,post,chars,pri){const m=me(),pc=C(post.by),mine=post.by===w.meId;
  const sys='You write realistic replies from different high-school students under a social media post. Every reply must respond directly to what the post actually says and stay on its topic, in that person\'s own voice and in line with how they feel about the poster. 3 to 14 words each. Normal spelling and grammar, casual tone, at most one emoji, no hashtags, no quote marks. Output exactly one line per person in the form Name: reply.\nPeople:\n'+chars.map(c=>{const r=c.rel;return '- '+brief(c)+(mine&&r?'. To '+m.name+' they are: '+r.type+'; they feel: '+r.theirFeel+'.':'')}).join('\n');
  const txt=post.text?'"'+post.text+'"'+(post.img?' (with a photo attached)':''):'a photo with no caption';
@@ -221,10 +230,17 @@ function localReply(c,post){const k=kw(post.text),r=c.rel||{},K=k?k[0].toUpperCa
  if(post.img&&!post.text)return rnd(['Where was this taken?','Okay, this is a great photo.','Wait, who took this?','This is such a good shot.']);
  if(!k)return rnd(['Wait, what happened?','Tell me more about this.','Okay, now I am curious.']);
  return rnd(['Wait, what happened with '+k+'?',K+', huh? Tell me more.','Okay, now I want to hear more about '+k+'.','Ha, '+k+' will do that to you.',(r.close||0)>=6?'You good? '+K+' sounds like a lot.':'Honestly, '+k+' is a whole mood.'])}
+function threadBanter(w,post,pri){if(!WE||wid!==w.id)return;const au=C(post.by);if(!au)return;const ids=[...new Set([post.by,...post.replies.map(r=>r.by)])].filter(id=>id!==w.meId);
+ const pool=w.chars.filter(c=>c.id!==w.meId&&!isEnemy(c)&&(ids.includes(c.id)||Math.random()<.2)).sort(()=>Math.random()-.5).slice(0,4);if(pool.length<2)return;
+ const sys='You write realistic follow-up comments in a social media thread between high-school students. Continue the thread with 2 or 3 new comments from different people. Comments react to the original post and to each other\'s earlier comments (agreeing, teasing, answering a question, asking a follow-up) and stay on topic. Each is 3 to 14 words, normal spelling, at most one emoji, no hashtags. Output one per line in the form Name: comment.\nPeople:\n'+pool.map(c=>'- '+brief(c)).join('\n');
+ const th=post.replies.slice(-8).map(r=>((C(r.by)||{}).name||'?')+': '+r.text).join('\n');
+ llm(sys,[{role:'user',content:au.name+' posted: "'+(post.text||'a photo')+'"\nComments so far:\n'+th+'\nWrite the next comments.'}],pool.length*34,false,.85,pri).then(t=>parseLines(t,pool)).then(L=>{if(wid!==w.id)return;L.slice(0,3).filter(x=>!dup(x.t,post.replies.map(r=>r.text))).forEach((x,i)=>setTimeout(()=>{if(wid!==w.id)return;post.replies.push({by:x.c.id,text:x.t});save();refresh()},i*2200+300))}).catch(()=>{})}
 let topBusy=0;
 // runs every few seconds while the page is open: new posts, and replies on your latest post
 function fastTick(){if(!wid||editId||document.visibilityState!=='visible')return;const w=W(),ai=w.chars.filter(c=>c.id!==w.meId);if(!ai.length)return;
  livePost(w,ai);
+ if(WE&&!JOBS.some(j=>j.pri===2)&&!(tab==='dm'&&(dmWith||grp))){const tp=w.posts.slice(0,15).find(p=>p.replies.length>=2&&p.replies.length<9&&Date.now()-(p.tb||0)>45000&&Date.now()-p.t>20000);if(tp&&Math.random()<.5){tp.tb=Date.now();threadBanter(w,tp,2)}
+  const g=(w.groups||[]).filter(x=>!x.busy&&Date.now()-(x.last||0)>((tab==='dm'&&grp===x.id)?12000:40000)&&(((tab==='dm'&&grp===x.id))||x.msgs.slice(-6).some(y=>y.from===w.meId)||x.msgs.length<6))[0];if(g)groupBanter(w,g,false)}
  if(Date.now()-lastNPC>20000&&!(tab==='dm'&&(dmWith||grp)))localPost(w,ai);
  const mine=w.posts.find(p=>p.by===w.meId&&Date.now()-p.t>30000&&Date.now()-p.t<30*60000&&p.replies.filter(r=>r.by!==w.meId).length<5);
  if(mine&&WE&&!topBusy&&(mine.top||0)<3&&!(tab==='dm'&&(dmWith||grp))){topBusy=1;mine.top=(mine.top||0)+1;const rp=ai.filter(c=>!isEnemy(c)&&!mine.replies.some(x=>x.by===c.id)).sort(()=>Math.random()-.5).slice(0,4);
@@ -244,7 +260,8 @@ function notify(title,text,open){let b=document.getElementById('notif');if(b)b.r
  b.innerHTML=`<b>${esc(title)}</b><div>${esc(String(text).slice(0,90))}</div>`;b.style.cssText='position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(92vw,420px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:14px;padding:10px 14px;z-index:99;box-shadow:0 6px 24px #0006;cursor:pointer';
  b.onclick=()=>{b.remove();open&&open()};document.body.appendChild(b);setTimeout(()=>b.remove(),5000)}
 const lt=(w,c)=>{const d=w.dms[c.id]||[];return d.length?(d[d.length-1].t||1):0};
-const slowBanner=()=>TPS&&TPS<8&&!FAST?`<div class="card" style="border-color:var(--acc)"><b>The AI is slow on this device</b> (${TPS.toFixed(1)} words per second), so texts, posts and events take a long time. Fast mode uses a smaller AI that answers about 3 times quicker (one-time download of about 1 GB).<br><br><button class="btn sm" data-a="aifast">Switch to Fast mode</button></div>`:'';
+const aiBanner=()=>restarting?`<div class="card" style="border-color:var(--acc)"><b>Restarting the AI…</b> It stopped responding${lastErr?' ('+esc(lastErr)+')':''}. Texts and replies come back in a moment.</div>`:'';
+const slowBanner=()=>aiBanner()+(TPS&&TPS<8&&!FAST?`<div class="card" style="border-color:var(--acc)"><b>The AI is slow on this device</b> (${TPS.toFixed(1)} words per second), so texts, posts and events take a long time. Fast mode uses a smaller AI that answers about 3 times quicker (one-time download of about 1 GB).<br><br><button class="btn sm" data-a="aifast">Switch to Fast mode</button></div>`:'');
 function toast(m){const t=document.createElement('div');t.textContent=m;t.style.cssText='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:99px;z-index:99';document.body.appendChild(t);setTimeout(()=>t.remove(),2500)}
 // ---- player commands (logged exactly as typed; never invented)
 function actReact(w,s){const m=me(),ai=w.chars.filter(c=>c.id!==m.id),low=s.toLowerCase();
@@ -331,7 +348,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-a],[data-t
  if(a==='like'){const p=P();p.lk=!p.lk;p.likes+=p.lk?1:-1;save();render()}
  if(a==='rt'){const p=P();p.rt=!p.rt;p.reposts+=p.rt?1:-1;save();render()}
  if(a==='reply'){replyTo=replyTo===d.id?null:d.id;render();const e=$('#rin');e&&e.focus()}
- if(a==='rsend'){const v=$('#rin').value.trim(),p=P();if(v){p.replies.push({by:w.meId,text:v});replyTo=null;answer(p,v);save();render()}}
+ if(a==='rsend'){const v=$('#rin').value.trim(),p=P();if(v){p.replies.push({by:w.meId,text:v});replyTo=null;answer(p,v);setTimeout(()=>threadBanter(w,p,1),7000);save();render()}}
  if(a==='pickimg')$('#pimg').click();if(a==='pimgx'){postImg=null;render(1)}if(a==='post')command($('#cmd').value,true);if(a==='do')command($('#cmd').value,false);
  if(a==='dmback'){dmWith=null;render()}
  if(a==='dmsend'){const v=$('#dmin').value.trim();if(v)sendDM(dmWith,v)}
@@ -350,5 +367,5 @@ document.addEventListener('input',e=>{const th=e.target.dataset&&e.target.datase
  if(e.target.id==='q'){const q=e.target.value.toLowerCase(),w=W();$('#res').innerHTML=q?w.chars.filter(c=>(c.name+c.user).toLowerCase().includes(q)).map(c=>`<div class="card row">${av(c)}<b>${esc(c.name)}</b></div>`).join('')+w.posts.filter(p=>p.text.toLowerCase().includes(q)).map(postHTML).join(''):''}});
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.shiftKey)return;const b=e.target.id==='dmin'?'dmsend':e.target.id==='rin'?'rsend':e.target.id==='gin'?'gsend':0;if(b){e.preventDefault();document.querySelector('[data-a='+b+']').click()}});
 document.addEventListener('change',e=>{if(e.target.id==='pimg'){const f=e.target.files[0];e.target.value='';if(f)shrink(f,800,u=>{postImg=u;render(1)},.7)}});
-applyTheme();setInterval(liveTick,18000);setInterval(fastTick,4000);render();webInit();
+applyTheme();setInterval(liveTick,18000);setInterval(fastTick,4000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){hidAt=Date.now();return}if(WE&&hidAt&&Date.now()-hidAt>30000&&!restarting&&!jobRun){hidAt=0;webgen('Reply with OK.',[{role:'user',content:'hi'}],4).catch(()=>restartAI())}});render();webInit();
 </script></body></html>
